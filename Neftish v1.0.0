@@ -1,1 +1,537 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
+local Window = Rayfield:CreateWindow({
+   Name = "Neftish V1.0.0",
+   LoadingTitle = "Neftish",
+   LoadingSubtitle = "Neftish",
+   ConfigurationSaving = { 
+      Enabled = false 
+   },
+   KeySystem = false
+})
+
+local Tab = Window:CreateTab("Menu 1", 4483345998)
+local Tab2 = Window:CreateTab("Menu 2", 4483345998)
+local Tab3 = Window:CreateTab("Sc Game", 4483345998)
+
+local lp = game:GetService("Players").LocalPlayer
+local runService = game:GetService("RunService")
+local userInputService = game:GetService("UserInputService")
+
+local targetPlayerName = ""
+_G.CustomSpeed = 16
+_G.CustomJump = 50
+_G.EspEnabled = false
+_G.TouchFlingEnabled = false
+_G.NoclipEnabled = false
+_G.InfiniteJumpEnabled = false -- Variabel baru untuk status Infinite Jump
+
+if _G.HeightOffset == nil then _G.HeightOffset = 20 end
+if _G.FakeHeightEnabled == nil then _G.FakeHeightEnabled = false end
+
+if _G.HeightConnection then _G.HeightConnection:Disconnect() end
+if _G.StatConnection then _G.StatConnection:Disconnect() end
+if _G.NoclipConnection then _G.NoclipConnection:Disconnect() end
+
+_G.HeightConnection = runService.RenderStepped:Connect(function()
+    if _G.FakeHeightEnabled then
+        pcall(function()
+            local char = lp.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.HipHeight = _G.HeightOffset
+            end
+        end)
+    end
+end)
+
+_G.StatConnection = runService.RenderStepped:Connect(function()
+    pcall(function()
+        local char = lp.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            if _G.CustomSpeed ~= 16 then
+                hum.WalkSpeed = _G.CustomSpeed
+            end
+            if _G.CustomJump ~= 50 then
+                hum.JumpPower = _G.CustomJump
+                hum.UseJumpPower = true
+            end
+        end
+    end)
+end)
+
+_G.NoclipConnection = runService.Stepped:Connect(function()
+    if _G.NoclipEnabled then
+        pcall(function()
+            local char = lp.Character
+            if char then
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- LOGIK UTAMA INFINITE JUMP
+userInputService.JumpRequest:Connect(function()
+    if _G.InfiniteJumpEnabled then
+        pcall(function()
+            local char = lp.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    end
+end)
+
+task.spawn(function()
+    local hrp, c, vel, movel = nil, nil, nil, 0.1
+    while true do
+        runService.Heartbeat:Wait()
+        if _G.TouchFlingEnabled then
+            while _G.TouchFlingEnabled and not (c and c.Parent and hrp and hrp.Parent) do
+                runService.Heartbeat:Wait()
+                c = lp.Character
+                hrp = c and c:FindFirstChild("HumanoidRootPart")
+            end
+
+            if _G.TouchFlingEnabled and hrp and hrp.Parent then
+                pcall(function()
+                    vel = hrp.Velocity
+                    hrp.Velocity = vel * 10000 + Vector3.new(0, 10000, 0)
+                    runService.RenderStepped:Wait()
+                    if c and c.Parent and hrp and hrp.Parent then
+                        hrp.Velocity = vel
+                    end
+                    runService.Stepped:Wait()
+                    if c and c.Parent and hrp and hrp.Parent then
+                        hrp.Velocity = vel + Vector3.new(0, movel, 0)
+                        movel = movel * -1
+                    end
+                end)
+            end
+        end
+    end
+end)
+
+local function applyEsp(player, char)
+    if not char then return end
+    
+    local head = char:WaitForChild("Head", 5)
+    local targetHrp = char:WaitForChild("HumanoidRootPart", 5)
+    
+    if not head or not targetHrp then return end
+    if char:FindFirstChild("EspContainer") then char.EspContainer:Destroy() end
+    
+    local container = Instance.new("Folder")
+    container.Name = "EspContainer"
+    container.Parent = char
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.Adornee = head
+    billboard.AlwaysOnTop = true
+    billboard.ExtentsOffset = Vector3.new(0, 2.5, 0)
+    billboard.Parent = container
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = (player.DisplayName or player.Name) .. " [0m]"
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.TextSize = 14
+    label.Font = Enum.Font.SourceSansBold
+    label.Parent = billboard
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "EspOutline"
+    highlight.Adornee = char
+    highlight.FillTransparency = 1
+    highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = container
+    
+    local connection
+    connection = runService.RenderStepped:Connect(function()
+        if not char or not char.Parent or not container or not container.Parent then
+            connection:Disconnect()
+            return
+        end
+        
+        if _G.EspEnabled then
+            billboard.Enabled = true
+            highlight.Enabled = true
+            pcall(function()
+                local myChar = lp.Character
+                local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                if myHrp and targetHrp then
+                    local distance = math.floor((myHrp.Position - targetHrp.Position).Magnitude)
+                    label.Text = (player.DisplayName or player.Name) .. " [" .. tostring(distance) .. "m]"
+                else
+                    label.Text = player.DisplayName or player.Name
+                end
+            end)
+        else
+            billboard.Enabled = false
+            highlight.Enabled = false
+        end
+    end)
+end
+
+local function monitorPlayer(player)
+    if player == lp then return end
+    if player.Character then
+        task.spawn(applyEsp, player, player.Character)
+    end
+    player.CharacterAdded:Connect(function(char)
+        task.spawn(applyEsp, player, char)
+    end)
+end
+
+for _, p in pairs(game:GetService("Players"):GetPlayers()) do
+    monitorPlayer(p)
+end
+game:GetService("Players").PlayerAdded:Connect(monitorPlayer)
+
+-- ==========================================
+-- SCRIPT UTAMA UI & MENU INTERACTION
+-- ==========================================
+
+-- TAB MENU 1
+local Toggle = Tab:CreateToggle({
+   Name = "Fake Height (Melayang)",
+   CurrentValue = _G.FakeHeightEnabled,
+   Flag = "FakeHeightToggle",
+   Callback = function(Value)
+      _G.FakeHeightEnabled = Value
+      if not Value then
+         pcall(function()
+            local char = lp.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then 
+               hum.HipHeight = 2
+               task.wait(0.05)
+               hum:ChangeState(Enum.HumanoidStateType.Freefall)
+            end
+         end)
+      end
+   end,
+})
+
+local Input = Tab:CreateInput({
+   Name = "Ketik Ketinggian (Contoh: 200)",
+   PlaceholderText = "Ketik angka di sini...",
+   RemoveTextAfterFocusLost = false,
+   Callback = function(Text)
+      local numericValue = tonumber(Text)
+      if numericValue then
+         _G.HeightOffset = numericValue
+         if _G.FakeHeightEnabled then
+            pcall(function()
+               anyChar = lp.Character
+               local hum = anyChar and anyChar:FindFirstChildOfClass("Humanoid")
+               if hum then hum.HipHeight = numericValue end
+            end)
+         end
+      end
+   end,
+})
+
+local SpeedInput = Tab:CreateInput({
+   Name = "Ketik Kecepatan Jalan (Default: 16)",
+   PlaceholderText = "Ketik speed di sini...",
+   RemoveTextAfterFocusLost = false,
+   Callback = function(Text)
+      local numericValue = tonumber(Text)
+      if numericValue then
+         _G.CustomSpeed = numericValue
+      else
+         _G.CustomSpeed = 16
+      end
+   end,
+})
+
+local JumpInput = Tab:CreateInput({
+   Name = "Ketik Kecepatan Lompat (Default: 50)",
+   PlaceholderText = "Ketik power di sini...",
+   RemoveTextAfterFocusLost = false,
+   Callback = function(Text)
+      local numericValue = tonumber(Text)
+      if numericValue then
+         _G.CustomJump = numericValue
+      else
+         _G.CustomJump = 50
+      end
+   end
+})
+
+local TouchFlingToggle = Tab:CreateToggle({
+   Name = "Touch Fling (ON/OFF)",
+   CurrentValue = _G.TouchFlingEnabled,
+   Flag = "TouchFlingToggle",
+   Callback = function(Value)
+      _G.TouchFlingEnabled = Value
+   end,
+})
+
+local FlingInput = Tab:CreateInput({
+   Name = "Target Nama Player",
+   PlaceholderText = "Ketik nama/username...",
+   RemoveTextAfterFocusLost = false,
+   Callback = function(Text)
+      targetPlayerName = Text
+   end,
+})
+
+pcall(function()
+   if FlingInput and FlingInput.Interact then
+      local box = FlingInput.Interact:FindFirstChildWhichIsA("TextBox")
+      if box then
+         box.Size = UDim2.new(0, 150, 0, 30)
+         box.TextXAlignment = Enum.TextXAlignment.Center
+      end
+   end
+end)
+
+local FlingButton = Tab:CreateButton({
+   Name = "Fling!",
+   Callback = function()
+      if targetPlayerName ~= "" then
+         pcall(function()
+            local targetPlayer = nil
+            for _, v in pairs(game:GetService("Players"):GetPlayers()) do
+               if v ~= lp and (v.Name:lower():find(targetPlayerName:lower()) or v.DisplayName:lower():find(targetPlayerName:lower())) then
+                  targetPlayer = v
+                  break
+               end
+            end
+            
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+               local myHrp = lp.Character.HumanoidRootPart
+               local targetHrp = targetPlayer.Character.HumanoidRootPart
+               local hum = lp.Character:FindFirstChildOfClass("Humanoid")
+               
+               local oldVelocity = myHrp.Velocity
+               local oldRotVelocity = myHrp.RotVelocity
+               local oldCframe = myHrp.CFrame
+               
+               local flingTime = 0.5
+               local startTime = tick()
+               
+               while tick() - startTime < flingTime do
+                  runService.Heartbeat:Wait()
+                  if targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+                     myHrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, 0)
+                     myHrp.Velocity = Vector3.new(99999, 99999, 99999)
+                     myHrp.RotVelocity = Vector3.new(99999, 99999, 99999)
+                  else
+                     break
+                  end
+               end
+               
+               task.wait(0.1)
+               myHrp.CFrame = oldCframe
+               myHrp.Velocity = oldVelocity
+               myHrp.RotVelocity = oldRotVelocity
+               
+               if hum then
+                  hum:ChangeState(Enum.HumanoidStateType.Freefall)
+                  task.wait(0.05)
+                  hum:ChangeState(Enum.HumanoidStateType.Running)
+               end
+            end
+         end)
+      end
+   end,
+})
+
+-- TAB MENU 2
+local EspToggle = Tab2:CreateToggle({
+   Name = "ESP Outline + Nama (Wallhack)",
+   CurrentValue = _G.EspEnabled,
+   Flag = "EspBoxToggle",
+   Callback = function(Value)
+      _G.EspEnabled = Value
+   end,
+})
+
+local NoclipToggle = Tab2:CreateToggle({
+   Name = "Noclip (Tembus Dinding)",
+   CurrentValue = _G.NoclipEnabled,
+   Flag = "NoclipToggle",
+   Callback = function(Value)
+      _G.NoclipEnabled = Value
+   end,
+})
+
+-- BARU: Toggle Infinite Jump
+local InfJumpToggle = Tab2:CreateToggle({
+   Name = "Infinite Jump (Lompat Tanpa Batas)",
+   CurrentValue = _G.InfiniteJumpEnabled,
+   Flag = "InfJumpToggle",
+   Callback = function(Value)
+      _G.InfiniteJumpEnabled = Value
+   end,
+})
+
+local spectateIndex = 1
+local spectateScreenGui = nil
+
+local function createSpectatePanel()
+    if game:GetService("CoreGui"):FindFirstChild("NeftishSpectateGui") then
+        game:GetService("CoreGui").NeftishSpectateGui:Destroy()
+    end
+
+    local sgui = Instance.new("ScreenGui")
+    sgui.Name = "NeftishSpectateGui"
+    sgui.Parent = game:GetService("CoreGui")
+    spectateScreenGui = sgui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 300, 0, 60)
+    frame.Position = UDim2.new(0.5, -150, 0.85, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.Draggable = true
+    frame.Parent = sgui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 0.4, 0)
+    nameLabel.Position = UDim2.new(0, 0, 0, 5)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = "Memuat Player..."
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.Font = Enum.Font.SourceSansBold
+    nameLabel.TextSize = 16
+    nameLabel.Parent = frame
+
+    local btnLeft = Instance.new("TextButton")
+    btnLeft.Size = UDim2.new(0, 40, 0, 30)
+    btnLeft.Position = UDim2.new(0.05, 0, 0.45, 0)
+    btnLeft.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    btnLeft.Text = "<"
+    btnLeft.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btnLeft.Font = Enum.Font.SourceSansBold
+    btnLeft.TextSize = 18
+    btnLeft.Parent = frame
+    Instance.new("UICorner", btnLeft).CornerRadius = UDim.new(0, 5)
+
+    local btnRight = Instance.new("TextButton")
+    btnRight.Size = UDim2.new(0, 40, 0, 30)
+    btnRight.Position = UDim2.new(0.95, -40, 0.45, 0)
+    btnRight.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    btnRight.Text = ">"
+    btnRight.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btnRight.Font = Enum.Font.SourceSansBold
+    btnRight.TextSize = 18
+    btnRight.Parent = frame
+    Instance.new("UICorner", btnRight).CornerRadius = UDim.new(0, 5)
+
+    local btnClose = Instance.new("TextButton")
+    btnClose.Size = UDim2.new(0, 100, 0, 30)
+    btnClose.Position = UDim2.new(0.5, -50, 0.45, 0)
+    btnClose.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    btnClose.Text = "Kembali (X)"
+    btnClose.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btnClose.Font = Enum.Font.SourceSansBold
+    btnClose.TextSize = 14
+    btnClose.Parent = frame
+    Instance.new("UICorner", btnClose).CornerRadius = UDim.new(0, 5)
+
+    local function updateSpectate()
+        local players = {}
+        for _, p in pairs(game:GetService("Players"):GetPlayers()) do
+            if p ~= lp then table.insert(players, p) end
+        end
+
+        if #players == 0 then
+            nameLabel.Text = "Tidak ada player lain"
+            workspace.CurrentCamera.CameraSubject = lp.Character:FindFirstChildOfClass("Humanoid")
+            return
+        end
+
+        if spectateIndex > #players then spectateIndex = 1 end
+        if spectateIndex < 1 then spectateIndex = #players end
+
+        local target = players[spectateIndex]
+        if target and target.Character and target.Character:FindFirstChildOfClass("Humanoid") then
+            nameLabel.Text = "Spectating: " .. (target.DisplayName or target.Name)
+            workspace.CurrentCamera.CameraSubject = target.Character:FindFirstChildOfClass("Humanoid")
+        else
+            nameLabel.Text = "Player tidak memiliki karakter"
+        end
+    end
+
+    btnLeft.MouseButton1Click:Connect(function()
+        spectateIndex = spectateIndex - 1
+        updateSpectate()
+    end)
+
+    btnRight.MouseButton1Click:Connect(function()
+        spectateIndex = spectateIndex + 1
+        updateSpectate()
+    end)
+
+    btnClose.MouseButton1Click:Connect(function()
+        pcall(function()
+            local char = lp.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                workspace.CurrentCamera.CameraSubject = hum
+            end
+        end)
+        sgui:Destroy()
+    end)
+
+    updateSpectate()
+end
+
+local SpectatePanelButton = Tab2:CreateButton({
+   Name = "Buka Panel Spectate (Navigasi)",
+   Callback = function()
+      pcall(function()
+          createSpectatePanel()
+      end)
+   end,
+})
+
+local FlyButton = Tab2:CreateButton({
+   Name = "Fly (Terbang)",
+   Callback = function()
+      pcall(function()
+         loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))()
+      end)
+   end,
+})
+
+-- TAB MENU 3
+local EatButton = Tab3:CreateButton({
+   Name = "Eat to Grow",
+   Callback = function()
+      pcall(function()
+         loadstring(game:HttpGet("https://raw.githubusercontent.com/Duckycant/Trrr/refs/heads/main/obfuscated_script-1779726606854.lua.txt"))()
+      end)
+   end,
+})
+
+local MergeButton = Tab3:CreateButton({
+   Name = "Merge A nuke",
+   Callback = function()
+      pcall(function()
+         loadstring(game:HttpGet("https://raw.githubusercontent.com/gumanba/Scripts/main/MergeaNuke"))()
+      end)
+   end,
+})
