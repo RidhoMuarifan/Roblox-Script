@@ -24,7 +24,7 @@ _G.CustomJump = 50
 _G.EspEnabled = false
 _G.TouchFlingEnabled = false
 _G.NoclipEnabled = false
-_G.InfiniteJumpEnabled = false -- Variabel baru untuk status Infinite Jump
+_G.InfiniteJumpEnabled = false
 
 if _G.HeightOffset == nil then _G.HeightOffset = 20 end
 if _G.FakeHeightEnabled == nil then _G.FakeHeightEnabled = false end
@@ -76,7 +76,6 @@ _G.NoclipConnection = runService.Stepped:Connect(function()
     end
 end)
 
--- LOGIK UTAMA INFINITE JUMP
 userInputService.JumpRequest:Connect(function()
     if _G.InfiniteJumpEnabled then
         pcall(function()
@@ -372,7 +371,6 @@ local NoclipToggle = Tab2:CreateToggle({
    end,
 })
 
--- BARU: Toggle Infinite Jump
 local InfJumpToggle = Tab2:CreateToggle({
    Name = "Infinite Jump (Lompat Tanpa Batas)",
    CurrentValue = _G.InfiniteJumpEnabled,
@@ -532,6 +530,16 @@ local MergeButton = Tab3:CreateButton({
    Callback = function()
       pcall(function()
          loadstring(game:HttpGet("https://raw.githubusercontent.com/gumanba/Scripts/main/MergeaNuke"))()
+      end)
+   end,
+})
+
+-- BARU: Tombol Eat The World
+local EatWorldButton = Tab3:CreateButton({
+   Name = "Eat The World",
+   Callback = function()
+      pcall(function()
+         loadstring(game:HttpGet("https://raw.githubusercontent.com/RidhoMuarifan/Roblox-Script/refs/heads/main/Script/Eat%20The%20World"))()
       end)
    end,
 })
