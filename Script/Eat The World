@@ -31,7 +31,6 @@ pcall(function() DestroyOldMenus(LocalPlayer:WaitForChild("PlayerGui")) end)
 local MenuGui = Instance.new("ScreenGui")
 MenuGui.Name = "ETW_DedicatedHub_V4"
 MenuGui.IgnoreGuiInset = true
-MenuGui.Parent = game.CoreGui
 if not pcall(function() MenuGui.Parent = game.CoreGui end) then
     MenuGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
@@ -209,7 +208,7 @@ local nextAutoEatPauseAt = tick() + AutoEatPauseInterval
 local autoEatPausedUntil = 0
 local MapPartsCache = {}
 local lastMapPartsRefresh = 0
-local RandomTeleportInterval = 1
+local RandomTeleportInterval = 3
 local RandomGenerator = Random.new()
 local BlockedTeleportNames = {"sell", "cash", "shop", "trade", "claim", "market"}
 local BlockedActionRemoteNames = {"sell", "cash", "shop", "trade", "claim", "market", "progress", "bar", "fill", "money", "coin", "reward", "collect"}
@@ -493,7 +492,7 @@ CreateToggle("Auto Sell", function(val)
     Config.AutoSell = val
 end)
 
-CreateToggle("Random Teleport 1s", function(val)
+CreateToggle("Random Teleport 3s", function(val)
     Config.RandomTeleportEnabled = val
 end)
 
