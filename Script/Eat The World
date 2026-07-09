@@ -1,0 +1,513 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+local Connections = {}
+local Config = {
+    AutoEat = false,
+    AutoSell = false,
+    RandomTeleportEnabled = false
+}
+local ScriptRunning = true
+
+if _G.ETW_DedicatedHubCleanup then
+    pcall(_G.ETW_DedicatedHubCleanup)
+end
+
+local function DestroyOldMenus(parent)
+    for _, child in pairs(parent:GetChildren()) do
+        if child.Name == "ETW_DedicatedHub" or child.Name == "ETW_DedicatedHub_V4" then
+            child:Destroy()
+        end
+    end
+end
+
+pcall(function() DestroyOldMenus(game.CoreGui) end)
+pcall(function() DestroyOldMenus(LocalPlayer:WaitForChild("PlayerGui")) end)
+
+local MenuGui = Instance.new("ScreenGui")
+MenuGui.Name = "ETW_DedicatedHub_V4"
+MenuGui.IgnoreGuiInset = true
+MenuGui.Parent = game.CoreGui
+if not pcall(function() MenuGui.Parent = game.CoreGui end) then
+    MenuGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 320, 0, 315)
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -157)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Parent = MenuGui
+
+local Corner = Instance.new("UICorner", MainFrame)
+Corner.CornerRadius = UDim.new(0, 10)
+
+local Header = Instance.new("Frame")
+Header.Name = "Header"
+Header.Size = UDim2.new(1, 0, 0, 45)
+Header.BackgroundColor3 = Color3.fromRGB(180, 80, 20)
+Header.BorderSizePixel = 0
+Header.Active = true 
+Header.Parent = MainFrame
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 10)
+
+local HeaderFix = Instance.new("Frame")
+HeaderFix.Size = UDim2.new(1, 0, 0, 10)
+HeaderFix.Position = UDim2.new(0, 0, 1, -10)
+HeaderFix.BackgroundColor3 = Color3.fromRGB(180, 80, 20)
+HeaderFix.BorderSizePixel = 0
+HeaderFix.Parent = Header
+
+local Title = Instance.new("TextLabel")
+Title.Text = "EAT THE WORLD HUB"
+Title.Size = UDim2.new(1, 0, 1, 0)
+Title.BackgroundTransparency = 1
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBlack
+Title.TextSize = 16
+Title.Parent = Header
+
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+table.insert(Connections, Header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+    end
+end))
+
+table.insert(Connections, UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end))
+
+table.insert(Connections, UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end))
+
+local Container = Instance.new("ScrollingFrame")
+Container.Size = UDim2.new(1, -20, 1, -65)
+Container.Position = UDim2.new(0, 10, 0, 55)
+Container.BackgroundTransparency = 1
+Container.BorderSizePixel = 0
+Container.ScrollBarThickness = 4
+Container.CanvasSize = UDim2.new(0, 0, 0, 0)
+Container.Parent = MainFrame
+local Layout = Instance.new("UIListLayout", Container)
+Layout.Padding = UDim.new(0, 10)
+
+table.insert(Connections, Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    Container.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y + 8)
+end))
+
+local function CreateToggle(text, callback)
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(1, 0, 0, 45)
+    Frame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    Frame.Parent = Container
+    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+    
+    local Label = Instance.new("TextLabel")
+    Label.Text = text
+    Label.Size = UDim2.new(0.7, 0, 1, 0)
+    Label.Position = UDim2.new(0, 10, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.Font = Enum.Font.GothamBold
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.TextSize = 13
+    Label.Parent = Frame
+    
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(0, 45, 0, 22)
+    Button.Position = UDim2.new(1, -55, 0.5, -11)
+    Button.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    Button.Text = ""
+    Button.Parent = Frame
+    Instance.new("UICorner", Button).CornerRadius = UDim.new(1, 0)
+    
+    local state = false
+    table.insert(Connections, Button.MouseButton1Click:Connect(function()
+        state = not state
+        if state then
+            TweenService:Create(Button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 120, 40)}):Play()
+        else
+            TweenService:Create(Button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 50, 55)}):Play()
+        end
+        callback(state)
+    end))
+end
+
+local function CreateButton(text, callback)
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(1, 0, 0, 45)
+    Btn.BackgroundColor3 = Color3.fromRGB(60, 120, 60)
+    Btn.Text = text
+    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Btn.Font = Enum.Font.GothamBold
+    Btn.TextSize = 14
+    Btn.Parent = Container
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+    table.insert(Connections, Btn.MouseButton1Click:Connect(callback))
+end
+
+local function CreateCloseButton(text, callback)
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(1, 0, 0, 45)
+    Btn.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
+    Btn.Text = text
+    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Btn.Font = Enum.Font.GothamBold
+    Btn.TextSize = 14
+    Btn.Parent = Container
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+    table.insert(Connections, Btn.MouseButton1Click:Connect(callback))
+end
+
+local function CleanupScript()
+    if not ScriptRunning then return end
+    
+    ScriptRunning = false
+    Config.AutoEat = false
+    Config.AutoSell = false
+    Config.RandomTeleportEnabled = false
+    
+    for _, conn in pairs(Connections) do
+        if conn then
+            pcall(function() conn:Disconnect() end)
+        end
+    end
+    
+    pcall(function() MenuGui:Destroy() end)
+    
+    if _G.ETW_DedicatedHubCleanup == CleanupScript then
+        _G.ETW_DedicatedHubCleanup = nil
+    end
+end
+
+_G.ETW_DedicatedHubCleanup = CleanupScript
+
+local GrabRemotesCache = {}
+local EatRemotesCache = {}
+local lastRemotesRefresh = 0
+local AutoEatPauseInterval = 30
+local AutoEatPauseDuration = 1
+local nextAutoEatPauseAt = tick() + AutoEatPauseInterval
+local autoEatPausedUntil = 0
+local MapPartsCache = {}
+local lastMapPartsRefresh = 0
+local RandomTeleportInterval = 1
+local RandomGenerator = Random.new()
+local BlockedTeleportNames = {"sell", "cash", "shop", "trade", "claim", "market"}
+local BlockedActionRemoteNames = {"sell", "cash", "shop", "trade", "claim", "market", "progress", "bar", "fill", "money", "coin", "reward", "collect"}
+
+local function HasNameInPath(instance, names)
+    local current = instance
+    
+    while current and current ~= workspace do
+        local currentName = string.lower(current.Name)
+        
+        for _, name in ipairs(names) do
+            if string.find(currentName, name, 1, true) then
+                return true
+            end
+        end
+        
+        current = current.Parent
+    end
+    
+    return false
+end
+
+local function HasBlockedTeleportName(instance)
+    return HasNameInPath(instance, BlockedTeleportNames)
+end
+
+local function IsSellLikeRemote(remote)
+    return HasNameInPath(remote, BlockedActionRemoteNames)
+end
+
+local function RefreshMapParts()
+    MapPartsCache = {}
+    lastMapPartsRefresh = tick()
+    
+    local mapRoot = workspace:FindFirstChild("Map") or workspace
+    local character = LocalPlayer.Character
+    
+    for _, part in pairs(mapRoot:GetDescendants()) do
+        if part:IsA("BasePart") and part.CanCollide and part.Transparency < 1 then
+            local isOwnCharacterPart = character and part:IsDescendantOf(character)
+            local isBigEnough = part.Size.X >= 6 and part.Size.Z >= 6
+            local isBlockedArea = HasBlockedTeleportName(part)
+            
+            if not isOwnCharacterPart and isBigEnough and not isBlockedArea then
+                table.insert(MapPartsCache, part)
+            end
+        end
+    end
+end
+
+local function TeleportToRandomMapSpot()
+    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    if #MapPartsCache == 0 or (tick() - lastMapPartsRefresh) > 5 then
+        RefreshMapParts()
+    end
+    
+    if #MapPartsCache == 0 then return end
+    
+    local targetPart = MapPartsCache[RandomGenerator:NextInteger(1, #MapPartsCache)]
+    if not targetPart or not targetPart.Parent then
+        RefreshMapParts()
+        return
+    end
+    
+    local safeX = math.max(targetPart.Size.X / 2 - 2, 0)
+    local safeZ = math.max(targetPart.Size.Z / 2 - 2, 0)
+    local localX = RandomGenerator:NextNumber(-safeX, safeX)
+    local localZ = RandomGenerator:NextNumber(-safeZ, safeZ)
+    local targetCFrame = targetPart.CFrame * CFrame.new(localX, targetPart.Size.Y / 2 + 5, localZ)
+    
+    root.CFrame = targetCFrame
+end
+
+local function RefreshRemotes()
+    GrabRemotesCache = {}
+    EatRemotesCache = {}
+    lastRemotesRefresh = tick()
+    
+    pcall(function()
+        for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+            if v:IsA("RemoteEvent") then
+                local n = string.lower(v.Name)
+                local isSellLike = IsSellLikeRemote(v)
+                
+                if not isSellLike and n == "grab" then
+                    table.insert(GrabRemotesCache, v)
+                end
+                
+                if not isSellLike and n == "eat" then
+                    table.insert(EatRemotesCache, v)
+                end
+            end
+        end
+        
+        local char = LocalPlayer.Character
+        if char then
+            for _, v in pairs(char:GetDescendants()) do
+                if v:IsA("RemoteEvent") then
+                    local n = string.lower(v.Name)
+                    local isSellLike = IsSellLikeRemote(v)
+                    if not isSellLike and n == "grab" then
+                        table.insert(GrabRemotesCache, v)
+                    end
+                    if not isSellLike and n == "eat" then
+                        table.insert(EatRemotesCache, v)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local GetSizeData
+
+local function CanSellNow()
+    if not GetSizeData then return false end
+    
+    local cSize, mSize = GetSizeData()
+    return cSize > 0 and mSize > 0 and cSize >= mSize and mSize ~= math.huge
+end
+
+local function GetSellRemote()
+    local character = LocalPlayer.Character
+    if not character then return nil end
+    
+    local eventsFolder = character:FindFirstChild("Events")
+    if not eventsFolder then return nil end
+    
+    local sellRemote = eventsFolder:FindFirstChild("Sell")
+    if sellRemote and sellRemote:IsA("RemoteEvent") then
+        return sellRemote
+    end
+    
+    return nil
+end
+
+local function FireSellRemotes(forceSell)
+    if not ScriptRunning then return end
+    
+    if not forceSell and (not Config.AutoSell or not CanSellNow()) then
+        return
+    end
+    
+    local sellRemote = GetSellRemote()
+    if not sellRemote then return end
+    
+    pcall(function() sellRemote:FireServer() end)
+end
+
+local function IsCharacterFalling()
+    local character = LocalPlayer.Character
+    if not character then return false end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    
+    local state = humanoid:GetState()
+    return state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.FallingDown
+end
+
+local function ShouldPauseAutoEat()
+    local now = tick()
+    
+    if now < autoEatPausedUntil then
+        return true
+    end
+    
+    if now >= nextAutoEatPauseAt then
+        autoEatPausedUntil = now + AutoEatPauseDuration
+        nextAutoEatPauseAt = now + AutoEatPauseInterval + AutoEatPauseDuration
+        return true
+    end
+    
+    return false
+end
+
+table.insert(Connections, RunService.Heartbeat:Connect(function()
+    if not ScriptRunning then return end
+    
+    if Config.AutoEat then
+        if ShouldPauseAutoEat() then
+            return
+        end
+        
+        if IsCharacterFalling() then
+            return
+        end
+        
+        if #GrabRemotesCache == 0 or #EatRemotesCache == 0 or (tick() - lastRemotesRefresh) > 5 then
+            RefreshRemotes()
+        end
+        
+        for i = 1, #GrabRemotesCache do
+            local remote = GrabRemotesCache[i]
+            if remote and remote.Parent then
+                pcall(function() remote:FireServer() end)
+            end
+        end
+        
+        for i = 1, #EatRemotesCache do
+            local remote = EatRemotesCache[i]
+            if remote and remote.Parent then
+                pcall(function() remote:FireServer() end)
+            end
+        end
+    end
+end))
+
+task.spawn(function()
+    while ScriptRunning do
+        task.wait(RandomTeleportInterval)
+        
+        if Config.RandomTeleportEnabled then
+            TeleportToRandomMapSpot()
+        end
+    end
+end)
+
+local MaxSizeGrowthFunction = nil
+
+pcall(function()
+    MaxSizeGrowthFunction = require(ReplicatedStorage:WaitForChild("ItemInfo")).Upgrades.MaxSize.growthFunction
+end)
+
+local function ApplySizeGrowth(value)
+    if MaxSizeGrowthFunction then
+        local success, result = pcall(MaxSizeGrowthFunction, value)
+        if success and type(result) == "number" then
+            return result
+        end
+    end
+    
+    return value
+end
+
+GetSizeData = function()
+    local currentSize = 0
+    local maxSize = math.huge 
+    
+    local character = LocalPlayer.Character
+    if character then
+        local sizeVal = character:FindFirstChild("Size")
+        if sizeVal and (sizeVal:IsA("IntValue") or sizeVal:IsA("NumberValue")) then
+            currentSize = ApplySizeGrowth(sizeVal.Value)
+        end
+    end
+    
+    local upgradesFolder = LocalPlayer:FindFirstChild("Upgrades") or LocalPlayer:FindFirstChild("upgrades") or LocalPlayer:FindFirstChild("Upgrade")
+    if upgradesFolder then
+        local maxVal = upgradesFolder:FindFirstChild("MaxSize")
+        if maxVal and (maxVal:IsA("IntValue") or maxVal:IsA("NumberValue")) then
+            maxSize = ApplySizeGrowth(maxVal.Value)
+        end
+    end
+    
+    return currentSize, maxSize
+end
+
+task.spawn(function()
+    while ScriptRunning do
+        task.wait(0.4)
+        if Config.AutoSell then
+            if CanSellNow() then
+                FireSellRemotes()
+                task.wait(1)
+            end
+        end
+    end
+end)
+
+CreateToggle("Auto Eat and Grab", function(val)
+    Config.AutoEat = val
+    nextAutoEatPauseAt = tick() + AutoEatPauseInterval
+    autoEatPausedUntil = 0
+end)
+
+CreateToggle("Auto Sell", function(val)
+    Config.AutoSell = val
+end)
+
+CreateToggle("Random Teleport 1s", function(val)
+    Config.RandomTeleportEnabled = val
+end)
+
+CreateButton("Sell Now", function()
+    FireSellRemotes(true)
+end)
+
+CreateCloseButton("Close Script", function()
+    CleanupScript()
+end)
+
+table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        MenuGui.Enabled = not MenuGui.Enabled
+    end
+end))
