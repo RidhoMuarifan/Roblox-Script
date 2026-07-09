@@ -534,12 +534,21 @@ local MergeButton = Tab3:CreateButton({
    end,
 })
 
--- BARU: Tombol Eat The World
 local EatWorldButton = Tab3:CreateButton({
    Name = "Eat The World",
    Callback = function()
       pcall(function()
          loadstring(game:HttpGet("https://raw.githubusercontent.com/RidhoMuarifan/Roblox-Script/refs/heads/main/Script/Eat%20The%20World"))()
+      end)
+   end,
+})
+
+-- BARU: Tombol Infinite Yield (Admin Script)
+local InfiniteYieldButton = Tab3:CreateButton({
+   Name = "Infinite Yield (Admin)",
+   Callback = function()
+      pcall(function()
+         loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
       end)
    end,
 })
