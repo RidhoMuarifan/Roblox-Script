@@ -533,4 +533,34 @@ AddButton(ShopTab, "Sell All Now (Instant)", Color3.fromRGB(160, 90, 25), functi
 end)
 
 local UpgradeLabel = Instance.new("TextLabel")
-UpgradeLab
+UpgradeLabel.Text = "—— AUTO UPGRADES INDIVIDUAL ——"
+UpgradeLabel.Size = UDim2.new(1, 0, 0, 25)
+UpgradeLabel.BackgroundTransparency = 1
+UpgradeLabel.TextColor3 = Color3.fromRGB(120, 120, 130)
+UpgradeLabel.Font = Enum.Font.GothamBold
+UpgradeLabel.TextSize = 10
+UpgradeLabel.Parent = ShopTab
+
+AddToggle(ShopTab, "Auto Upgrade MaxSize", function(val)
+    Config.Upgrade_MaxSize = val
+end)
+
+AddToggle(ShopTab, "Auto Upgrade Multiplier", function(val)
+    Config.Upgrade_Multiplier = val
+end)
+
+AddToggle(ShopTab, "Auto Upgrade Speed", function(val)
+    Config.Upgrade_Speed = val
+end)
+
+AddToggle(ShopTab, "Auto Upgrade EatSpeed", function(val)
+    Config.Upgrade_EatSpeed = val
+end)
+
+-- PC Keybind (Right Shift)
+table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        MenuGui.Enabled = not MenuGui.Enabled
+    end
+end))
