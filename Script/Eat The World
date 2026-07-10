@@ -1,3 +1,6 @@
+-- ====================================================================
+-- FILE INI DISIMPAN DI GITHUB BARU (Misal: EatTheWorldUI.lua)
+-- ====================================================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -17,10 +20,6 @@ local Config = {
 }
 local ScriptRunning = true
 
-if _G.ETW_DedicatedHubCleanup then
-    pcall(_G.ETW_DedicatedHubCleanup)
-end
-
 local function DestroyOldMenus(parent)
     for _, child in pairs(parent:GetChildren()) do
         if child.Name == "ETW_SidebarHub" or child.Name == "ETW_FloatingBtnGui" then
@@ -28,11 +27,9 @@ local function DestroyOldMenus(parent)
         end
     end
 end
-
 pcall(function() DestroyOldMenus(game.CoreGui) end)
 pcall(function() DestroyOldMenus(LocalPlayer:WaitForChild("PlayerGui")) end)
 
--- BASE GUI CONTAINER
 local TargetParent = game.CoreGui
 if not pcall(function() local a = game.CoreGui.Name end) then
     TargetParent = LocalPlayer:WaitForChild("PlayerGui")
@@ -53,7 +50,6 @@ MainFrame.Active = true
 MainFrame.Parent = MenuGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
--- FLOATING BUTTON UI
 local FloatingGui = Instance.new("ScreenGui")
 FloatingGui.Name = "ETW_FloatingBtnGui"
 FloatingGui.ResetOnSpawn = false
@@ -64,7 +60,7 @@ FloatBtn.Name = "FloatBtn"
 FloatBtn.Size = UDim2.new(0, 50, 0, 50)
 FloatBtn.Position = UDim2.new(0.05, 0, 0.2, 0)
 FloatBtn.BackgroundColor3 = Color3.fromRGB(180, 80, 20)
-FloatBtn.Text = "N" -- Menggunakan inisial N untuk Neftish
+FloatBtn.Text = "N"
 FloatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 FloatBtn.Font = Enum.Font.GothamBlack
 FloatBtn.TextSize = 22
@@ -82,7 +78,6 @@ FloatBtn.MouseButton1Click:Connect(function()
     MenuGui.Enabled = not MenuGui.Enabled
 end)
 
--- TOP HEADER BAR (NAMA BARU DITERAPKAN DI SINI)
 local Header = Instance.new("Frame")
 Header.Name = "Header"
 Header.Size = UDim2.new(1, 0, 0, 35)
@@ -99,10 +94,10 @@ HeaderFix.BorderSizePixel = 0
 HeaderFix.Parent = Header
 
 local Title = Instance.new("TextLabel")
-Title.Text = "  EAT THE WORLD NEFTISH V1" -- Identitas baru skrip kamu
+Title.Text = "  EAT THE WORLD NEFTISH V1"
 Title.Size = UDim2.new(0.7, 0, 1, 0)
 Title.BackgroundTransparency = 1
-Title.TextColor3 = Color3.fromRGB(255, 140, 50) -- Mengubah warna teks judul agar lebih stand out
+Title.TextColor3 = Color3.fromRGB(255, 140, 50)
 Title.Font = Enum.Font.GothamBlack
 Title.TextSize = 13
 Title.TextXAlignment = Enum.TextXAlignment.Left
@@ -118,7 +113,6 @@ CloseBtn.Font = Enum.Font.Gotham
 CloseBtn.TextSize = 14
 CloseBtn.Parent = Header
 
--- Drag System
 local dragging, dragStart, startPos
 table.insert(Connections, Header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -139,7 +133,6 @@ table.insert(Connections, UserInputService.InputChanged:Connect(function(input)
     end
 end))
 
--- SIDEBAR (KIRI)
 local Sidebar = Instance.new("Frame")
 Sidebar.Name = "Sidebar"
 Sidebar.Size = UDim2.new(0, 130, 1, -35)
@@ -152,7 +145,6 @@ local SideLayout = Instance.new("UIListLayout", Sidebar)
 SideLayout.Padding = UDim.new(0, 2)
 SideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
--- CONTAINER KONTEN (KANAN)
 local ContentFrame = Instance.new("Frame")
 ContentFrame.Name = "ContentFrame"
 ContentFrame.Size = UDim2.new(1, -135, 1, -40)
@@ -277,7 +269,6 @@ local function AddButton(parentTab, text, color, callback)
     table.insert(Connections, Btn.MouseButton1Click:Connect(callback))
 end
 
--- SISTEM POP-UP KONFIRMASI CLOSING
 local ConfirmFrame = Instance.new("Frame")
 ConfirmFrame.Name = "ConfirmFrame"
 ConfirmFrame.Size = UDim2.new(0, 280, 0, 130)
@@ -324,7 +315,6 @@ NoBtn.ZIndex = 10
 NoBtn.Parent = ConfirmFrame
 Instance.new("UICorner", NoBtn).CornerRadius = UDim.new(0, 5)
 
--- CLEANUP SYSTEM
 local function CleanupScript()
     if not ScriptRunning then return end
     ScriptRunning = false
@@ -341,25 +331,12 @@ local function CleanupScript()
     end
     pcall(function() MenuGui:Destroy() end)
     pcall(function() FloatingGui:Destroy() end)
-    if _G.ETW_DedicatedHubCleanup == CleanupScript then
-        _G.ETW_DedicatedHubCleanup = nil
-    end
 end
-_G.ETW_DedicatedHubCleanup = CleanupScript
 
-CloseBtn.MouseButton1Click:Connect(function()
-    ConfirmFrame.Visible = true
-end)
+CloseBtn.MouseButton1Click:Connect(function() ConfirmFrame.Visible = true end)
+YesBtn.MouseButton1Click:Connect(function() CleanupScript() end)
+NoBtn.MouseButton1Click:Connect(function() ConfirmFrame.Visible = false end)
 
-YesBtn.MouseButton1Click:Connect(function()
-    CleanupScript()
-end)
-
-NoBtn.MouseButton1Click:Connect(function()
-    ConfirmFrame.Visible = false
-end)
-
--- CORE GAME REQUISITES
 local GrabRemotesCache, EatRemotesCache = {}, {}
 local lastRemotesRefresh, autoEatPausedUntil = 0, 0
 local AutoEatPauseInterval, AutoEatPauseDuration = 30, 1
@@ -438,14 +415,13 @@ local function GetSellRemote()
 end
 
 local function FireSellRemotes(forceSell)
-    if not ScriptRunning then return end
     if not forceSell and (not Config.AutoSell or not CanSellNow()) then return end
     local sellRemote = GetSellRemote()
     if sellRemote then pcall(function() sellRemote:FireServer() end) end
 end
 
 table.insert(Connections, RunService.Heartbeat:Connect(function()
-    if not ScriptRunning or not Config.AutoEat then return end
+    if not Config.AutoEat then return end
     if tick() < autoEatPausedUntil or LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") and (LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):GetState() == Enum.HumanoidStateType.Freefall) then return end
     
     if tick() >= nextAutoEatPauseAt then
@@ -488,7 +464,6 @@ GetSizeData = function()
     return currentSize, maxSize
 end
 
--- Loop Auto Sell
 task.spawn(function()
     while ScriptRunning do
         task.wait(0.4)
@@ -499,7 +474,6 @@ task.spawn(function()
     end
 end)
 
--- Loop Auto Upgrade
 task.spawn(function()
     local purchaseEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("PurchaseEvent")
     while ScriptRunning do
@@ -513,24 +487,14 @@ task.spawn(function()
     end
 end)
 
--- ADD ITEMS TO TABS
 AddToggle(FarmTab, "Auto Eat and Grab", function(val)
     Config.AutoEat = val
     nextAutoEatPauseAt = tick() + AutoEatPauseInterval
     autoEatPausedUntil = 0
 end)
-
-AddToggle(FarmTab, "Random Teleport 3s", function(val)
-    Config.RandomTeleportEnabled = val
-end)
-
-AddToggle(ShopTab, "Auto Sell (If Full)", function(val)
-    Config.AutoSell = val
-end)
-
-AddButton(ShopTab, "Sell All Now (Instant)", Color3.fromRGB(160, 90, 25), function()
-    FireSellRemotes(true)
-end)
+AddToggle(FarmTab, "Random Teleport 3s", function(val) Config.RandomTeleportEnabled = val end)
+AddToggle(ShopTab, "Auto Sell (If Full)", function(val) Config.AutoSell = val end)
+AddButton(ShopTab, "Sell All Now (Instant)", Color3.fromRGB(160, 90, 25), function() FireSellRemotes(true) end)
 
 local UpgradeLabel = Instance.new("TextLabel")
 UpgradeLabel.Text = "—— AUTO UPGRADES INDIVIDUAL ——"
@@ -541,26 +505,6 @@ UpgradeLabel.Font = Enum.Font.GothamBold
 UpgradeLabel.TextSize = 10
 UpgradeLabel.Parent = ShopTab
 
-AddToggle(ShopTab, "Auto Upgrade MaxSize", function(val)
-    Config.Upgrade_MaxSize = val
-end)
-
-AddToggle(ShopTab, "Auto Upgrade Multiplier", function(val)
-    Config.Upgrade_Multiplier = val
-end)
-
-AddToggle(ShopTab, "Auto Upgrade Speed", function(val)
-    Config.Upgrade_Speed = val
-end)
-
-AddToggle(ShopTab, "Auto Upgrade EatSpeed", function(val)
-    Config.Upgrade_EatSpeed = val
-end)
-
--- PC Keybind (Right Shift)
-table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.RightShift then
-        MenuGui.Enabled = not MenuGui.Enabled
-    end
-end))
+AddToggle(ShopTab, "Auto Upgrade MaxSize", function(val) Config.Upgrade_MaxSize = val end)
+AddToggle(ShopTab, "Auto Upgrade Multiplier", function(val) Config.Upgrade_Multiplier = val end)
+AddToggle(ShopTab, "Auto Upgrade Speed", function(va
