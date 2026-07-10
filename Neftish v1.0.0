@@ -538,7 +538,7 @@ local EatWorldButton = Tab3:CreateButton({
    Name = "Eat The World",
    Callback = function()
       pcall(function()
-         loadstring(game:HttpGet("https://raw.githubusercontent.com/RidhoMuarifan/Roblox-Script/refs/heads/main/Script/gemini-code-1783652365850.lua.txt"))()
+         loadstring(game:HttpGet("https://raw.githubusercontent.com/RidhoMuarifan/Roblox-Script/refs/heads/main/Script/EatTheWorld"))()
       end)
    end,
 })
