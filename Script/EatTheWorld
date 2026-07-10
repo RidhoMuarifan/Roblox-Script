@@ -525,4 +525,65 @@ task.spawn(function()
         if Config.AutoSell and CanSellNow() then
             FireSellRemotes()
             task.wait(1)
-     
+        end
+    end
+end)
+
+task.spawn(function()
+    local purchaseEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("PurchaseEvent")
+    while ScriptRunning do
+        task.wait(0.4)
+        pcall(function()
+            if Config.Upgrade_MaxSize then purchaseEvent:FireServer("MaxSize") end
+            if Config.Upgrade_Multiplier then purchaseEvent:FireServer("Multiplier") end
+            if Config.Upgrade_Speed then purchaseEvent:FireServer("Speed") end
+            if Config.Upgrade_EatSpeed then purchaseEvent:FireServer("EatSpeed") end
+        end)
+    end
+end)
+
+AddToggle(FarmTab, "Auto Eat and Grab", function(val)
+    Config.AutoEat = val
+end)
+
+AddToggle(FarmTab, "Auto Walk Random", function(val)
+    Config.AutoWalkRandom = val
+end)
+
+AddToggle(FarmTab, "Random Teleport 3s", function(val)
+    Config.RandomTeleportEnabled = val
+end)
+
+AddToggle(ShopTab, "Auto Sell (If Full)", function(val)
+    Config.AutoSell = val
+end)
+
+AddButton(ShopTab, "Sell All Now (Instant)", Color3.fromRGB(160, 90, 25), function()
+    FireSellRemotes(true)
+end)
+
+local UpgradeLabel = Instance.new("TextLabel")
+UpgradeLabel.Text = "  [ AUTO UPGRADE SHOP ]"
+UpgradeLabel.Size = UDim2.new(1, -5, 0, 30)
+UpgradeLabel.BackgroundTransparency = 1
+UpgradeLabel.TextColor3 = Color3.fromRGB(255, 140, 50)
+UpgradeLabel.Font = Enum.Font.GothamBold
+UpgradeLabel.TextSize = 12
+UpgradeLabel.TextXAlignment = Enum.TextXAlignment.Left
+UpgradeLabel.Parent = ShopTab
+
+AddToggle(ShopTab, "Upgrade Max Size", function(val)
+    Config.Upgrade_MaxSize = val
+end)
+
+AddToggle(ShopTab, "Upgrade Multiplier", function(val)
+    Config.Upgrade_Multiplier = val
+end)
+
+AddToggle(ShopTab, "Upgrade Speed", function(val)
+    Config.Upgrade_Speed = val
+end)
+
+AddToggle(ShopTab, "Upgrade Eat Speed", function(val)
+    Config.Upgrade_EatSpeed = val
+end)
