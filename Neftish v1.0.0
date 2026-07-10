@@ -537,11 +537,8 @@ local MergeButton = Tab3:CreateButton({
 local EatWorldButton = Tab3:CreateButton({
    Name = "Eat The World",
    Callback = function()
-      task.spawn(function()
-         pcall(function()
-            -- Link baru lu yang udah gak pakai spasi (%20)
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/RidhoMuarifan/Roblox-Script/refs/heads/main/Script/EatTheWorld"))()
-         end)
+      pcall(function()
+         loadstring(game:HttpGet("https://raw.githubusercontent.com/RidhoMuarifan/Roblox-Script/refs/heads/main/Script/EatTheWorld"))()
       end)
    end,
 })
