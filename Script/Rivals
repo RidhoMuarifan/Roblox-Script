@@ -1,0 +1,515 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Global Connections & Config Storage
+local Connections = {}
+local Config = {
+    AimbotEnabled = false,
+    TeamCheck = true,
+    AimbotSmoothness = 0.15, -- 0.05 (sangat halus) s/d 1 (langsung snap)
+    FovRadius = 120,
+    ShowFovCircle = false,
+    
+    EspEnabled = false,
+    EspTeamCheck = true
+}
+
+local ScriptRunning = true
+
+-- Cleanup Script Lama (mencegah tumpuk UI/connection)
+if _G.NeftishRivalsCleanup then
+    pcall(_G.NeftishRivalsCleanup)
+end
+
+-- Safely Get Target Parent Gui
+local TargetParent = CoreGui
+if not pcall(function() local _ = CoreGui.Name end) then
+    TargetParent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+-- Destroy UI Lama jika ada
+for _, child in pairs(TargetParent:GetChildren()) do
+    if child.Name == "Neftish_RivalsHub" or child.Name == "Neftish_RivalsFloatBtn" then
+        child:Destroy()
+    end
+end
+
+-- ==========================================
+-- LOGIKA TEAM CHECK KHUSUS GAME RIVALS & GENERAL
+-- ==========================================
+local function IsEnemy(targetPlayer)
+    if not targetPlayer or targetPlayer == LocalPlayer then return false end
+    
+    -- 1. Pengecekan Roblox Standard Team
+    if LocalPlayer.Team and targetPlayer.Team then
+        return targetPlayer.Team ~= LocalPlayer.Team
+    end
+    
+    -- 2. Pengecekan Custom Folder / Highlight di Rivals (jika tidak pakai default Teams)
+    local myChar = LocalPlayer.Character
+    local targetChar = targetPlayer.Character
+    if myChar and targetChar then
+        -- Cek jika ada atribut/folder khusus tim
+        if myChar.Parent ~= workspace and myChar.Parent == targetChar.Parent then
+            return false -- Satu folder tim yang sama
+        end
+    end
+    
+    return true -- Default: Anggap musuh jika tidak ada sistem tim yang aktif
+end
+
+-- ==========================================
+-- LOGIKA AIMBOT & FOV CIRCLE
+-- ==========================================
+local FovCircle = Drawing.new("Circle")
+FovCircle.Color = Color3.fromRGB(255, 50, 50)
+FovCircle.Thickness = 1.5
+FovCircle.Filled = false
+FovCircle.Transparency = 1
+FovCircle.NumSides = 60
+FovCircle.Visible = false
+
+local function GetClosestEnemyInFOV()
+    local closestTarget = nil
+    local shortestDistance = Config.FovRadius
+    local mousePos = UserInputService:GetMouseLocation()
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            if not Config.TeamCheck or IsEnemy(player) then
+                local char = player.Character
+                local head = char and char:FindFirstChild("Head")
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+                if head and hum and hum.Health > 0 then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                    if onScreen then
+                        local distanceToMouse = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                        if distanceToMouse < shortestDistance then
+                            shortestDistance = distanceToMouse
+                            closestTarget = head
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return closestTarget
+end
+
+-- RenderStepped Loop untuk Aimbot & FOV Circle
+table.insert(Connections, RunService.RenderStepped:Connect(function()
+    -- Update FOV Circle Position
+    local mousePos = UserInputService:GetMouseLocation()
+    FovCircle.Position = mousePos
+    FovCircle.Radius = Config.FovRadius
+    FovCircle.Visible = Config.ShowFovCircle and ScriptRunning
+
+    -- Execution Aimbot
+    if Config.AimbotEnabled and ScriptRunning then
+        local targetHead = GetClosestEnemyInFOV()
+        if targetHead then
+            local targetCFrame = CFrame.new(Camera.CFrame.Position, targetHead.Position)
+            -- Smooth Aiming menggunakan CFrame Lerp
+            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, Config.AimbotSmoothness)
+        end
+    end
+end))
+
+-- ==========================================
+-- LOGIKA ESP / WALLHACK
+-- ==========================================
+local function ApplyEsp(player, char)
+    if not char or player == LocalPlayer then return end
+    
+    local head = char:WaitForChild("Head", 5)
+    local hrp = char:WaitForChild("HumanoidRootPart", 5)
+    if not head or not hrp then return end
+
+    if char:FindFirstChild("NeftishEsp") then char.NeftishEsp:Destroy() end
+
+    local container = Instance.new("Folder")
+    container.Name = "NeftishEsp"
+    container.Parent = char
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.Adornee = head
+    billboard.AlwaysOnTop = true
+    billboard.ExtentsOffset = Vector3.new(0, 2.5, 0)
+    billboard.Parent = container
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 60, 60)
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.TextSize = 13
+    label.Font = Enum.Font.SourceSansBold
+    label.Parent = billboard
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "EspOutline"
+    highlight.Adornee = char
+    highlight.FillTransparency = 1
+    highlight.OutlineColor = Color3.fromRGB(255, 50, 50)
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = container
+
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        if not char or not char.Parent or not container or not container.Parent or not ScriptRunning then
+            if conn then conn:Disconnect() end
+            return
+        end
+
+        local shouldShow = Config.EspEnabled and (not Config.EspTeamCheck or IsEnemy(player))
+        
+        billboard.Enabled = shouldShow
+        highlight.Enabled = shouldShow
+
+        if shouldShow then
+            pcall(function()
+                local myChar = LocalPlayer.Character
+                local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                if myHrp and hrp then
+                    local dist = math.floor((myHrp.Position - hrp.Position).Magnitude)
+                    label.Text = (player.DisplayName or player.Name) .. " [" .. tostring(dist) .. "m]"
+                else
+                    label.Text = player.DisplayName or player.Name
+                end
+            end)
+        end
+    end)
+    table.insert(Connections, conn)
+end
+
+local function MonitorPlayer(player)
+    if player == LocalPlayer then return end
+    if player.Character then task.spawn(ApplyEsp, player, player.Character) end
+    table.insert(Connections, player.CharacterAdded:Connect(function(char)
+        task.spawn(ApplyEsp, player, char)
+    end))
+end
+
+for _, p in pairs(Players:GetPlayers()) do MonitorPlayer(p) end
+table.insert(Connections, Players.PlayerAdded:Connect(MonitorPlayer))
+
+-- ==========================================
+-- CREATING CUSTOM GUI INTERFACE
+-- ==========================================
+
+local MenuGui = Instance.new("ScreenGui")
+MenuGui.Name = "Neftish_RivalsHub"
+MenuGui.IgnoreGuiInset = true
+MenuGui.Parent = TargetParent
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 480, 0, 320)
+MainFrame.Position = UDim2.new(0.5, -240, 0.5, -160)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Parent = MenuGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
+-- Floating Toggle Button (N)
+local FloatingGui = Instance.new("ScreenGui")
+FloatingGui.Name = "Neftish_RivalsFloatBtn"
+FloatingGui.ResetOnSpawn = false
+FloatingGui.Parent = TargetParent
+
+local FloatBtn = Instance.new("TextButton")
+FloatBtn.Name = "FloatBtn"
+FloatBtn.Size = UDim2.new(0, 45, 0, 45)
+FloatBtn.Position = UDim2.new(0.05, 0, 0.2, 0)
+FloatBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+FloatBtn.Text = "N"
+FloatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FloatBtn.Font = Enum.Font.GothamBlack
+FloatBtn.TextSize = 20
+FloatBtn.Active = true
+FloatBtn.Draggable = true
+FloatBtn.Parent = FloatingGui
+Instance.new("UICorner", FloatBtn).CornerRadius = UDim.new(1, 0)
+
+FloatBtn.MouseButton1Click:Connect(function()
+    MenuGui.Enabled = not MenuGui.Enabled
+end)
+
+-- Header Bar
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 35)
+Header.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
+Header.BorderSizePixel = 0
+Header.Parent = MainFrame
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 8)
+
+local Title = Instance.new("TextLabel")
+Title.Text = "  NEFTISH V1 - RIVALS HUB"
+Title.Size = UDim2.new(0.7, 0, 1, 0)
+Title.BackgroundTransparency = 1
+Title.TextColor3 = Color3.fromRGB(255, 70, 70)
+Title.Font = Enum.Font.GothamBlack
+Title.TextSize = 13
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Header
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 35, 1, 0)
+CloseBtn.Position = UDim2.new(1, -35, 0, 0)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Text = "✕"
+CloseBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+CloseBtn.Font = Enum.Font.Gotham
+CloseBtn.TextSize = 14
+CloseBtn.Parent = Header
+
+-- Dragging System
+local dragging, dragStart, startPos
+table.insert(Connections, Header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+    end
+end))
+table.insert(Connections, UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end))
+table.insert(Connections, UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end))
+
+-- Sidebar Kiri & Content Frame Kanan
+local Sidebar = Instance.new("Frame")
+Sidebar.Size = UDim2.new(0, 130, 1, -35)
+Sidebar.Position = UDim2.new(0, 0, 0, 35)
+Sidebar.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+Sidebar.BorderSizePixel = 0
+Sidebar.Parent = MainFrame
+
+local SideLayout = Instance.new("UIListLayout", Sidebar)
+SideLayout.Padding = UDim.new(0, 2)
+SideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Size = UDim2.new(1, -135, 1, -40)
+ContentFrame.Position = UDim2.new(0, 135, 0, 38)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = MainFrame
+
+local Tabs, TabButtons = {}, {}
+
+local function CreateTab(name)
+    local TabContainer = Instance.new("ScrollingFrame")
+    TabContainer.Size = UDim2.new(1, 0, 1, 0)
+    TabContainer.BackgroundTransparency = 1
+    TabContainer.BorderSizePixel = 0
+    TabContainer.ScrollBarThickness = 3
+    TabContainer.Visible = false
+    TabContainer.Parent = ContentFrame
+    
+    local ContentLayout = Instance.new("UIListLayout", TabContainer)
+    ContentLayout.Padding = UDim.new(0, 6)
+    
+    ContentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        TabContainer.CanvasSize = UDim2.new(0, 0, 0, ContentLayout.AbsoluteContentSize.Y + 10)
+    end)
+    
+    local TabBtn = Instance.new("TextButton")
+    TabBtn.Size = UDim2.new(0, 120, 0, 35)
+    TabBtn.BackgroundTransparency = 1
+    TabBtn.Text = "  " .. name
+    TabBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    TabBtn.Font = Enum.Font.GothamBold
+    TabBtn.TextSize = 12
+    TabBtn.TextXAlignment = Enum.TextXAlignment.Left
+    TabBtn.Parent = Sidebar
+    Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 4)
+    
+    Tabs[name] = TabContainer
+    TabButtons[name] = TabBtn
+    
+    TabBtn.MouseButton1Click:Connect(function()
+        for tName, container in pairs(Tabs) do
+            container.Visible = (tName == name)
+            TweenService:Create(TabButtons[tName], TweenInfo.new(0.2), {
+                BackgroundTransparency = (tName == name) and 0 or 1,
+                BackgroundColor3 = (tName == name) and Color3.fromRGB(35, 35, 45) or Color3.fromRGB(24, 24, 30),
+                TextColor3 = (tName == name) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(150, 150, 150)
+            }):Play()
+        end
+    end)
+    
+    return TabContainer
+end
+
+-- Helper Pembuat Component Toggle & Slider
+local function AddToggle(parentTab, text, defaultState, callback)
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(1, -5, 0, 40)
+    Frame.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
+    Frame.Parent = parentTab
+    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 5)
+    
+    local Label = Instance.new("TextLabel")
+    Label.Text = text
+    Label.Size = UDim2.new(0.7, 0, 1, 0)
+    Label.Position = UDim2.new(0, 10, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.TextSize = 12
+    Label.Parent = Frame
+    
+    local ToggleBtn = Instance.new("TextButton")
+    ToggleBtn.Size = UDim2.new(0, 38, 0, 20)
+    ToggleBtn.Position = UDim2.new(1, -48, 0.5, -10)
+    ToggleBtn.BackgroundColor3 = defaultState and Color3.fromRGB(220, 60, 60) or Color3.fromRGB(45, 45, 50)
+    ToggleBtn.Text = ""
+    ToggleBtn.Parent = Frame
+    Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
+    
+    local Switch = Instance.new("Frame")
+    Switch.Size = UDim2.new(0, 16, 0, 16)
+    Switch.Position = defaultState and UDim2.new(1, -18, 0, 2) or UDim2.new(0, 2, 0, 2)
+    Switch.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Switch.Parent = ToggleBtn
+    Instance.new("UICorner", Switch).CornerRadius = UDim.new(1, 0)
+    
+    local state = defaultState
+    table.insert(Connections, ToggleBtn.MouseButton1Click:Connect(function()
+        state = not state
+        if state then
+            TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(220, 60, 60)}):Play()
+            TweenService:Create(Switch, TweenInfo.new(0.2), {Position = UDim2.new(1, -18, 0, 2)}):Play()
+        else
+            TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(45, 45, 50)}):Play()
+            TweenService:Create(Switch, TweenInfo.new(0.2), {Position = UDim2.new(0, 2, 0, 2)}):Play()
+        end
+        callback(state)
+    end))
+end
+
+-- ==========================================
+-- SETUP TAB & FITUR RIVALS
+-- ==========================================
+
+local CombatTab = CreateTab("🎯 Combat")
+local VisualTab = CreateTab("👁 Visual")
+
+-- Set Default Active Tab
+Tabs["🎯 Combat"].Visible = true
+TabButtons["🎯 Combat"].BackgroundTransparency = 0
+TabButtons["🎯 Combat"].BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+TabButtons["🎯 Combat"].TextColor3 = Color3.fromRGB(255, 255, 255)
+
+-- Component Tab Combat
+AddToggle(CombatTab, "Enable Aimbot", Config.AimbotEnabled, function(val)
+    Config.AimbotEnabled = val
+end)
+
+AddToggle(CombatTab, "Team Check (Musuh Aja)", Config.TeamCheck, function(val)
+    Config.TeamCheck = val
+end)
+
+AddToggle(CombatTab, "Tampilkan FOV Circle", Config.ShowFovCircle, function(val)
+    Config.ShowFovCircle = val
+end)
+
+-- Component Tab Visual
+AddToggle(VisualTab, "ESP Wallhack + Name", Config.EspEnabled, function(val)
+    Config.EspEnabled = val
+end)
+
+AddToggle(VisualTab, "ESP Team Check", Config.EspTeamCheck, function(val)
+    Config.EspTeamCheck = val
+end)
+
+-- ==========================================
+-- CONFIRMATION PANEL CLOSE
+-- ==========================================
+local ConfirmFrame = Instance.new("Frame")
+ConfirmFrame.Size = UDim2.new(0, 260, 0, 120)
+ConfirmFrame.Position = UDim2.new(0.5, -130, 0.5, -60)
+ConfirmFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+ConfirmFrame.BorderSizePixel = 0
+ConfirmFrame.Visible = false
+ConfirmFrame.ZIndex = 10
+ConfirmFrame.Parent = MainFrame
+Instance.new("UICorner", ConfirmFrame).CornerRadius = UDim.new(0, 8)
+
+local ConfirmText = Instance.new("TextLabel")
+ConfirmText.Text = "Tutup Script Rivals?"
+ConfirmText.Size = UDim2.new(1, 0, 0, 50)
+ConfirmText.BackgroundTransparency = 1
+ConfirmText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ConfirmText.Font = Enum.Font.GothamBold
+ConfirmText.TextSize = 13
+ConfirmText.ZIndex = 10
+ConfirmText.Parent = ConfirmFrame
+
+local YesBtn = Instance.new("TextButton")
+YesBtn.Size = UDim2.new(0, 90, 0, 32)
+YesBtn.Position = UDim2.new(0.12, 0, 0.55, 0)
+YesBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+YesBtn.Text = "Ya"
+YesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+YesBtn.Font = Enum.Font.GothamBold
+YesBtn.TextSize = 12
+YesBtn.ZIndex = 10
+YesBtn.Parent = ConfirmFrame
+Instance.new("UICorner", YesBtn).CornerRadius = UDim.new(0, 5)
+
+local NoBtn = Instance.new("TextButton")
+NoBtn.Size = UDim2.new(0, 90, 0, 32)
+NoBtn.Position = UDim2.new(0.53, 0, 0.55, 0)
+NoBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 60)
+NoBtn.Text = "Tidak"
+NoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+NoBtn.Font = Enum.Font.GothamBold
+NoBtn.TextSize = 12
+NoBtn.ZIndex = 10
+NoBtn.Parent = ConfirmFrame
+Instance.new("UICorner", NoBtn).CornerRadius = UDim.new(0, 5)
+
+local function CleanupScript()
+    if not ScriptRunning then return end
+    ScriptRunning = false
+    FovCircle.Visible = false
+    pcall(function() FovCircle:Remove() end)
+    
+    for _, conn in pairs(Connections) do
+        if conn then pcall(function() conn:Disconnect() end) end
+    end
+    
+    pcall(function() MenuGui:Destroy() end)
+    pcall(function() FloatingGui:Destroy() end)
+    
+    if _G.NeftishRivalsCleanup == CleanupScript then
+        _G.NeftishRivalsCleanup = nil
+    end
+end
+
+_G.NeftishRivalsCleanup = CleanupScript
+
+CloseBtn.MouseButton1Click:Connect(function() ConfirmFrame.Visible = true end)
+YesBtn.MouseButton1Click:Connect(function() CleanupScript() end)
+NoBtn.MouseButton1Click:Connect(function() ConfirmFrame.Visible = false end)
