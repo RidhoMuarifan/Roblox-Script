@@ -1,13 +1,13 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "Neftish V1.0.0",
-   LoadingTitle = "Neftish",
-   LoadingSubtitle = "Neftish",
-   ConfigurationSaving = { 
-      Enabled = false 
-   },
-   KeySystem = false
+    Name = "Neftish V1.0.0",
+    LoadingTitle = "Neftish",
+    LoadingSubtitle = "Neftish Hub",
+    ConfigurationSaving = { 
+        Enabled = false 
+    },
+    KeySystem = false
 })
 
 local Tab = Window:CreateTab("Menu 1", 4483345998)
@@ -29,6 +29,7 @@ _G.InfiniteJumpEnabled = false
 if _G.HeightOffset == nil then _G.HeightOffset = 20 end
 if _G.FakeHeightEnabled == nil then _G.FakeHeightEnabled = false end
 
+-- Cleanup koneksi lama jika script dijalankan ulang
 if _G.HeightConnection then _G.HeightConnection:Disconnect() end
 if _G.StatConnection then _G.StatConnection:Disconnect() end
 if _G.NoclipConnection then _G.NoclipConnection:Disconnect() end
@@ -67,7 +68,7 @@ _G.NoclipConnection = runService.Stepped:Connect(function()
             local char = lp.Character
             if char then
                 for _, part in pairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then
+                    if part:IsA("BasePart") and part.CanCollide then
                         part.CanCollide = false
                     end
                 end
@@ -88,6 +89,7 @@ userInputService.JumpRequest:Connect(function()
     end
 end)
 
+-- Loop Touch Fling
 task.spawn(function()
     local hrp, c, vel, movel = nil, nil, nil, 0.1
     while true do
@@ -118,6 +120,7 @@ task.spawn(function()
     end
 end)
 
+-- Sistem ESP (Box Outline & Info Jarak)
 local function applyEsp(player, char)
     if not char then return end
     
@@ -161,7 +164,7 @@ local function applyEsp(player, char)
     local connection
     connection = runService.RenderStepped:Connect(function()
         if not char or not char.Parent or not container or not container.Parent then
-            connection:Disconnect()
+            if connection then connection:Disconnect() end
             return
         end
         
@@ -206,182 +209,181 @@ game:GetService("Players").PlayerAdded:Connect(monitorPlayer)
 
 -- TAB MENU 1
 local Toggle = Tab:CreateToggle({
-   Name = "Fake Height (Melayang)",
-   CurrentValue = _G.FakeHeightEnabled,
-   Flag = "FakeHeightToggle",
-   Callback = function(Value)
-      _G.FakeHeightEnabled = Value
-      if not Value then
-         pcall(function()
-            local char = lp.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum then 
-               hum.HipHeight = 2
-               task.wait(0.05)
-               hum:ChangeState(Enum.HumanoidStateType.Freefall)
-            end
-         end)
-      end
-   end,
+    Name = "Fake Height (Melayang)",
+    CurrentValue = _G.FakeHeightEnabled,
+    Flag = "FakeHeightToggle",
+    Callback = function(Value)
+        _G.FakeHeightEnabled = Value
+        if not Value then
+            pcall(function()
+                local char = lp.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if hum then 
+                    hum.HipHeight = 2
+                    task.wait(0.05)
+                    hum:ChangeState(Enum.HumanoidStateType.Freefall)
+                end
+            end)
+        end
+    end,
 })
 
 local Input = Tab:CreateInput({
-   Name = "Ketik Ketinggian (Contoh: 200)",
-   PlaceholderText = "Ketik angka di sini...",
-   RemoveTextAfterFocusLost = false,
-   Callback = function(Text)
-      local numericValue = tonumber(Text)
-      if numericValue then
-         _G.HeightOffset = numericValue
-         if _G.FakeHeightEnabled then
-            pcall(function()
-               anyChar = lp.Character
-               local hum = anyChar and anyChar:FindFirstChildOfClass("Humanoid")
-               if hum then hum.HipHeight = numericValue end
-            end)
-         end
-      end
-   end,
+    Name = "Ketik Ketinggian (Contoh: 200)",
+    PlaceholderText = "Ketik angka di sini...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        local numericValue = tonumber(Text)
+        if numericValue then
+            _G.HeightOffset = numericValue
+            if _G.FakeHeightEnabled then
+                pcall(function()
+                    local anyChar = lp.Character
+                    local hum = anyChar and anyChar:FindFirstChildOfClass("Humanoid")
+                    if hum then hum.HipHeight = numericValue end
+                end)
+            end
+        end
+    end,
 })
 
 local SpeedInput = Tab:CreateInput({
-   Name = "Ketik Kecepatan Jalan (Default: 16)",
-   PlaceholderText = "Ketik speed di sini...",
-   RemoveTextAfterFocusLost = false,
-   Callback = function(Text)
-      local numericValue = tonumber(Text)
-      if numericValue then
-         _G.CustomSpeed = numericValue
-      else
-         _G.CustomSpeed = 16
-      end
-   end,
+    Name = "Ketik Kecepatan Jalan (Default: 16)",
+    PlaceholderText = "Ketik speed di sini...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        local numericValue = tonumber(Text)
+        if numericValue then
+            _G.CustomSpeed = numericValue
+        else
+            _G.CustomSpeed = 16
+        end
+    end,
 })
 
 local JumpInput = Tab:CreateInput({
-   Name = "Ketik Kecepatan Lompat (Default: 50)",
-   PlaceholderText = "Ketik power di sini...",
-   RemoveTextAfterFocusLost = false,
-   Callback = function(Text)
-      local numericValue = tonumber(Text)
-      if numericValue then
-         _G.CustomJump = numericValue
-      else
-         _G.CustomJump = 50
-      end
-   end
+    Name = "Ketik Kecepatan Lompat (Default: 50)",
+    PlaceholderText = "Ketik power di sini...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        local numericValue = tonumber(Text)
+        if numericValue then
+            _G.CustomJump = numericValue
+        else
+            _G.CustomJump = 50
+        end
+    end
 })
 
 local TouchFlingToggle = Tab:CreateToggle({
-   Name = "Touch Fling (ON/OFF)",
-   CurrentValue = _G.TouchFlingEnabled,
-   Flag = "TouchFlingToggle",
-   Callback = function(Value)
-      _G.TouchFlingEnabled = Value
-   end,
+    Name = "Touch Fling (ON/OFF)",
+    CurrentValue = _G.TouchFlingEnabled,
+    Flag = "TouchFlingToggle",
+    Callback = function(Value)
+        _G.TouchFlingEnabled = Value
+    end,
 })
 
 local FlingInput = Tab:CreateInput({
-   Name = "Target Nama Player",
-   PlaceholderText = "Ketik nama/username...",
-   RemoveTextAfterFocusLost = false,
-   Callback = function(Text)
-      targetPlayerName = Text
-   end,
+    Name = "Target Nama Player",
+    PlaceholderText = "Ketik nama/username...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        targetPlayerName = Text
+    end,
 })
 
 pcall(function()
-   if FlingInput and FlingInput.Interact then
-      local box = FlingInput.Interact:FindFirstChildWhichIsA("TextBox")
-      if box then
-         box.Size = UDim2.new(0, 150, 0, 30)
-         box.TextXAlignment = Enum.TextXAlignment.Center
-      end
-   end
+    if FlingInput and FlingInput.Interact then
+        local box = FlingInput.Interact:FindFirstChildWhichIsA("TextBox")
+        if box then
+            box.Size = UDim2.new(0, 150, 0, 30)
+            box.TextXAlignment = Enum.TextXAlignment.Center
+        end
+    end
 end)
 
 local FlingButton = Tab:CreateButton({
-   Name = "Fling!",
-   Callback = function()
-      if targetPlayerName ~= "" then
-         pcall(function()
-            local targetPlayer = nil
-            for _, v in pairs(game:GetService("Players"):GetPlayers()) do
-               if v ~= lp and (v.Name:lower():find(targetPlayerName:lower()) or v.DisplayName:lower():find(targetPlayerName:lower())) then
-                  targetPlayer = v
-                  break
-               end
-            end
-            
-            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
-               local myHrp = lp.Character.HumanoidRootPart
-               local targetHrp = targetPlayer.Character.HumanoidRootPart
-               local hum = lp.Character:FindFirstChildOfClass("Humanoid")
-               
-               local oldVelocity = myHrp.Velocity
-               local oldRotVelocity = myHrp.RotVelocity
-               local oldCframe = myHrp.CFrame
-               
-               local flingTime = 0.5
-               local startTime = tick()
-               
-               while tick() - startTime < flingTime do
-                  runService.Heartbeat:Wait()
-                  if targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
-                     myHrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, 0)
-                     myHrp.Velocity = Vector3.new(99999, 99999, 99999)
-                     myHrp.RotVelocity = Vector3.new(99999, 99999, 99999)
-                  else
-                     break
-                  end
-               end
-               
-               task.wait(0.1)
-               myHrp.CFrame = oldCframe
-               myHrp.Velocity = oldVelocity
-               myHrp.RotVelocity = oldRotVelocity
-               
-               if hum then
-                  hum:ChangeState(Enum.HumanoidStateType.Freefall)
-                  task.wait(0.05)
-                  hum:ChangeState(Enum.HumanoidStateType.Running)
-               end
-            end
-         end)
-      end
-   end,
+    Name = "Fling!",
+    Callback = function()
+        if targetPlayerName ~= "" then
+            pcall(function()
+                local targetPlayer = nil
+                for _, v in pairs(game:GetService("Players"):GetPlayers()) do
+                    if v ~= lp and (v.Name:lower():find(targetPlayerName:lower()) or v.DisplayName:lower():find(targetPlayerName:lower())) then
+                        targetPlayer = v
+                        break
+                    end
+                end
+                
+                if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+                    local myHrp = lp.Character.HumanoidRootPart
+                    local targetHrp = targetPlayer.Character.HumanoidRootPart
+                    local hum = lp.Character:FindFirstChildOfClass("Humanoid")
+                    
+                    local oldVelocity = myHrp.Velocity
+                    local oldRotVelocity = myHrp.RotVelocity
+                    local oldCframe = myHrp.CFrame
+                    
+                    local flingTime = 0.5
+                    local startTime = tick()
+                    
+                    while tick() - startTime < flingTime do
+                        runService.Heartbeat:Wait()
+                        if targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+                            myHrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, 0)
+                            myHrp.Velocity = Vector3.new(99999, 99999, 99999)
+                            myHrp.RotVelocity = Vector3.new(99999, 99999, 99999)
+                        else
+                            break
+                        end
+                    end
+                    
+                    task.wait(0.1)
+                    myHrp.CFrame = oldCframe
+                    myHrp.Velocity = oldVelocity
+                    myHrp.RotVelocity = oldRotVelocity
+                    
+                    if hum then
+                        hum:ChangeState(Enum.HumanoidStateType.Freefall)
+                        task.wait(0.05)
+                        hum:ChangeState(Enum.HumanoidStateType.Running)
+                    end
+                end
+            end)
+        end
+    end,
 })
 
 -- TAB MENU 2
 local EspToggle = Tab2:CreateToggle({
-   Name = "ESP Outline + Nama (Wallhack)",
-   CurrentValue = _G.EspEnabled,
-   Flag = "EspBoxToggle",
-   Callback = function(Value)
-      _G.EspEnabled = Value
-   end,
+    Name = "ESP Outline + Nama (Wallhack)",
+    CurrentValue = _G.EspEnabled,
+    Flag = "EspBoxToggle",
+    Callback = function(Value)
+        _G.EspEnabled = Value
+    end,
 })
 
 local NoclipToggle = Tab2:CreateToggle({
-   Name = "Noclip (Tembus Dinding)",
-   CurrentValue = _G.NoclipEnabled,
-   Flag = "NoclipToggle",
-   Callback = function(Value)
-      _G.NoclipEnabled = Value
-   end,
+    Name = "Noclip (Tembus Dinding)",
+    CurrentValue = _G.NoclipEnabled,
+    Flag = "NoclipToggle",
+    Callback = function(Value)
+        _G.NoclipEnabled = Value
+    end,
 })
 
 local InfJumpToggle = Tab2:CreateToggle({
-   Name = "Infinite Jump (Lompat Tanpa Batas)",
-   CurrentValue = _G.InfiniteJumpEnabled,
-   Flag = "InfJumpToggle",
-   Callback = function(Value)
-      _G.InfiniteJumpEnabled = Value
-   end,
+    Name = "Infinite Jump (Lompat Tanpa Batas)",
+    CurrentValue = _G.InfiniteJumpEnabled,
+    Flag = "InfJumpToggle",
+    Callback = function(Value)
+        _G.InfiniteJumpEnabled = Value
+    end,
 })
 
 local spectateIndex = 1
-local spectateScreenGui = nil
 
 local function createSpectatePanel()
     if game:GetService("CoreGui"):FindFirstChild("NeftishSpectateGui") then
@@ -391,7 +393,6 @@ local function createSpectatePanel()
     local sgui = Instance.new("ScreenGui")
     sgui.Name = "NeftishSpectateGui"
     sgui.Parent = game:GetService("CoreGui")
-    spectateScreenGui = sgui
 
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 300, 0, 60)
@@ -457,7 +458,9 @@ local function createSpectatePanel()
 
         if #players == 0 then
             nameLabel.Text = "Tidak ada player lain"
-            workspace.CurrentCamera.CameraSubject = lp.Character:FindFirstChildOfClass("Humanoid")
+            if lp.Character and lp.Character:FindFirstChildOfClass("Humanoid") then
+                workspace.CurrentCamera.CameraSubject = lp.Character:FindFirstChildOfClass("Humanoid")
+            end
             return
         end
 
@@ -498,57 +501,56 @@ local function createSpectatePanel()
 end
 
 local SpectatePanelButton = Tab2:CreateButton({
-   Name = "Buka Panel Spectate (Navigasi)",
-   Callback = function()
-      pcall(function()
-          createSpectatePanel()
-      end)
-   end,
+    Name = "Buka Panel Spectate (Navigasi)",
+    Callback = function()
+        pcall(function()
+            createSpectatePanel()
+        end)
+    end,
 })
 
 local FlyButton = Tab2:CreateButton({
-   Name = "Fly (Terbang)",
-   Callback = function()
-      pcall(function()
-         loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))()
-      end)
-   end,
+    Name = "Fly (Terbang)",
+    Callback = function()
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))()
+        end)
+    end,
 })
 
 -- TAB MENU 3
 local EatButton = Tab3:CreateButton({
-   Name = "Eat to Grow",
-   Callback = function()
-      pcall(function()
-         loadstring(game:HttpGet("https://raw.githubusercontent.com/Duckycant/Trrr/refs/heads/main/obfuscated_script-1779726606854.lua.txt"))()
-      end)
-   end,
+    Name = "Eat to Grow",
+    Callback = function()
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Duckycant/Trrr/refs/heads/main/obfuscated_script-1779726606854.lua.txt"))()
+        end)
+    end,
 })
 
 local MergeButton = Tab3:CreateButton({
-   Name = "Merge A nuke",
-   Callback = function()
-      pcall(function()
-         loadstring(game:HttpGet("https://raw.githubusercontent.com/gumanba/Scripts/main/MergeaNuke"))()
-      end)
-   end,
+    Name = "Merge A nuke",
+    Callback = function()
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/gumanba/Scripts/main/MergeaNuke"))()
+        end)
+    end,
 })
 
 local EatWorldButton = Tab3:CreateButton({
-   Name = "Eat The World",
-   Callback = function()
-      pcall(function()
-         loadstring(game:HttpGet("https://raw.githubusercontent.com/RidhoMuarifan/Roblox-Script/refs/heads/main/Script/EatTheWorld"))()
-      end)
-   end,
+    Name = "Eat The World",
+    Callback = function()
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/RidhoMuarifan/Roblox-Script/refs/heads/main/Script/EatTheWorld"))()
+        end)
+    end,
 })
 
--- BARU: Tombol Infinite Yield (Admin Script)
 local InfiniteYieldButton = Tab3:CreateButton({
-   Name = "Infinite Yield (Admin)",
-   Callback = function()
-      pcall(function()
-         loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
-      end)
-   end,
+    Name = "Infinite Yield (Admin)",
+    Callback = function()
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
+        end)
+    end,
 })
