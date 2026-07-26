@@ -13,10 +13,13 @@ local Window = Rayfield:CreateWindow({
 local Tab = Window:CreateTab("Menu 1", 4483345998)
 local Tab2 = Window:CreateTab("Menu 2", 4483345998)
 local Tab3 = Window:CreateTab("Sc Game", 4483345998)
+local TabMisc = Window:CreateTab("Misc", 4483345998) -- Tab Baru
 
 local lp = game:GetService("Players").LocalPlayer
 local runService = game:GetService("RunService")
 local userInputService = game:GetService("UserInputService")
+local proximityService = game:GetService("ProximityPromptService")
+local camera = workspace.CurrentCamera
 
 local targetPlayerName = ""
 _G.CustomSpeed = 16
@@ -25,6 +28,8 @@ _G.EspEnabled = false
 _G.TouchFlingEnabled = false
 _G.NoclipEnabled = false
 _G.InfiniteJumpEnabled = false
+_G.CameraFOV = 70
+_G.InstantPromptEnabled = false -- State awal Instant Prompt
 
 if _G.HeightOffset == nil then _G.HeightOffset = 20 end
 if _G.FakeHeightEnabled == nil then _G.FakeHeightEnabled = false end
@@ -383,6 +388,28 @@ local InfJumpToggle = Tab2:CreateToggle({
     end,
 })
 
+local PovSlider = Tab2:CreateSlider({
+    Name = "POV / FOV Kamera",
+    Range = {30, 120},
+    Increment = 1,
+    Suffix = " FOV",
+    CurrentValue = 70,
+    Flag = "PovSlider",
+    Callback = function(Value)
+        _G.CameraFOV = Value
+        if camera then
+            camera.FieldOfView = Value
+        end
+    end,
+})
+
+if _G.FovConnection then _G.FovConnection:Disconnect() end
+_G.FovConnection = runService.RenderStepped:Connect(function()
+    if camera and camera.FieldOfView ~= _G.CameraFOV then
+        camera.FieldOfView = _G.CameraFOV
+    end
+end)
+
 local spectateIndex = 1
 
 local function createSpectatePanel()
@@ -552,5 +579,55 @@ local InfiniteYieldButton = Tab3:CreateButton({
         pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
         end)
+    end,
+})
+
+-- ==========================================
+-- TAB MISC (INSTANT PROXIMITY PROMPT / HOLD)
+-- ==========================================
+
+-- Menyimpan durasi asli prompt agar bisa dikembalikan saat Toggle OFF
+local promptOriginalDurations = {}
+
+local function processPrompt(prompt)
+    if not promptOriginalDurations[prompt] then
+        promptOriginalDurations[prompt] = prompt.HoldDuration
+    end
+    
+    if _G.InstantPromptEnabled then
+        prompt.HoldDuration = 0
+    else
+        prompt.HoldDuration = promptOriginalDurations[prompt] or 1.5
+    end
+end
+
+-- Listener saat ada ProximityPrompt baru spawn
+workspace.DescendantAdded:Connect(function(descendant)
+    if descendant:IsA("ProximityPrompt") then
+        task.wait(0.1)
+        processPrompt(descendant)
+    end
+end)
+
+-- Listener saat prompt muncul di layar
+proximityService.PromptShown:Connect(function(prompt)
+    if _G.InstantPromptEnabled then
+        prompt.HoldDuration = 0
+    end
+end)
+
+local InstantPromptToggle = TabMisc:CreateToggle({
+    Name = "Instant Hold / Instant Pick (Proximity)",
+    CurrentValue = _G.InstantPromptEnabled,
+    Flag = "InstantPromptToggle",
+    Callback = function(Value)
+        _G.InstantPromptEnabled = Value
+        
+        -- Update semua prompt yang sedang ada di Workspace saat ini
+        for _, prompt in pairs(workspace:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                processPrompt(prompt)
+            end
+        end
     end,
 })
