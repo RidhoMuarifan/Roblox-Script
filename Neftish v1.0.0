@@ -545,7 +545,7 @@ local FlyButton = Tab2:CreateButton({
     end,
 })
 
--- TAB MENU 3
+-- TAB MENU 3 (Sc Game)
 local EatButton = Tab3:CreateButton({
     Name = "Eat to Grow",
     Callback = function()
@@ -569,6 +569,15 @@ local EatWorldButton = Tab3:CreateButton({
     Callback = function()
         pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/RidhoMuarifan/Roblox-Script/refs/heads/main/Script/EatTheWorld"))()
+        end)
+    end,
+})
+
+local MineAMountainButton = Tab3:CreateButton({
+    Name = "Mine A Mountain",
+    Callback = function()
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/RidhoMuarifan/Roblox-Script/refs/heads/main/Script/MineAMountain"))()
         end)
     end,
 })
