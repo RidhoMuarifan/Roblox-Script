@@ -13,7 +13,7 @@ local Window = Rayfield:CreateWindow({
 local Tab = Window:CreateTab("Menu 1", 4483345998)
 local Tab2 = Window:CreateTab("Menu 2", 4483345998)
 local Tab3 = Window:CreateTab("Sc Game", 4483345998)
-local TabMisc = Window:CreateTab("Misc", 4483345998) -- Tab Baru
+local TabMisc = Window:CreateTab("Misc", 4483345998) -- Tab Misc
 
 local lp = game:GetService("Players").LocalPlayer
 local runService = game:GetService("RunService")
@@ -30,6 +30,8 @@ _G.NoclipEnabled = false
 _G.InfiniteJumpEnabled = false
 _G.CameraFOV = 70
 _G.InstantPromptEnabled = false -- State awal Instant Prompt
+_G.NoRagdollEnabled = false    -- State awal No Ragdoll
+_G.NoFallDamageEnabled = false -- State awal No Fall Damage
 
 if _G.HeightOffset == nil then _G.HeightOffset = 20 end
 if _G.FakeHeightEnabled == nil then _G.FakeHeightEnabled = false end
@@ -38,6 +40,8 @@ if _G.FakeHeightEnabled == nil then _G.FakeHeightEnabled = false end
 if _G.HeightConnection then _G.HeightConnection:Disconnect() end
 if _G.StatConnection then _G.StatConnection:Disconnect() end
 if _G.NoclipConnection then _G.NoclipConnection:Disconnect() end
+if _G.NoRagdollConnection then _G.NoRagdollConnection:Disconnect() end
+if _G.NoFallDamageConnection then _G.NoFallDamageConnection:Disconnect() end
 
 _G.HeightConnection = runService.RenderStepped:Connect(function()
     if _G.FakeHeightEnabled then
@@ -75,6 +79,58 @@ _G.NoclipConnection = runService.Stepped:Connect(function()
                 for _, part in pairs(char:GetDescendants()) do
                     if part:IsA("BasePart") and part.CanCollide then
                         part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- Logic Loop untuk Anti Ragdoll Mandiri
+_G.NoRagdollConnection = runService.Stepped:Connect(function()
+    if _G.NoRagdollEnabled or _G.NoFallDamageEnabled then
+        pcall(function()
+            local char = lp.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                local state = hum:GetState()
+                if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Physics then
+                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+                if hum.PlatformStand then
+                    hum.PlatformStand = false
+                end
+            end
+        end)
+    end
+end)
+
+-- Logic Loop untuk Anti Fall Damage (Kecepatan Jatuh -75)
+_G.NoFallDamageConnection = runService.Heartbeat:Connect(function()
+    if _G.NoFallDamageEnabled then
+        pcall(function()
+            local char = lp.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            
+            if hrp and hum then
+                -- Menahan kecepatan jatuh di -75 (turun cepat tapi aman)
+                if hrp.AssemblyLinearVelocity.Y < -75 then
+                    hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, -75, hrp.AssemblyLinearVelocity.Z)
+                end
+
+                -- Auto-get up ketika mendekati tanah
+                local raycastParams = RaycastParams.new()
+                raycastParams.FilterAncestors:FindFirstChildWhichIsA("Instance")
+                raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                raycastParams.FilterDescendantsInstances = {char}
+
+                local rayResult = workspace:Raycast(hrp.Position, Vector3.new(0, -10, 0), raycastParams)
+                if rayResult then
+                    local state = hum:GetState()
+                    if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown or hum.PlatformStand then
+                        hum.PlatformStand = false
+                        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
                     end
                 end
             end
@@ -592,7 +648,7 @@ local InfiniteYieldButton = Tab3:CreateButton({
 })
 
 -- ==========================================
--- TAB MISC (INSTANT PROXIMITY PROMPT / HOLD)
+-- TAB MISC
 -- ==========================================
 
 -- Menyimpan durasi asli prompt agar bisa dikembalikan saat Toggle OFF
@@ -638,5 +694,23 @@ local InstantPromptToggle = TabMisc:CreateToggle({
                 processPrompt(prompt)
             end
         end
+    end,
+})
+
+local NoRagdollToggle = TabMisc:CreateToggle({
+    Name = "No Ragdoll (Anti Terjatuh)",
+    CurrentValue = _G.NoRagdollEnabled,
+    Flag = "NoRagdollToggle",
+    Callback = function(Value)
+        _G.NoRagdollEnabled = Value
+    end,
+})
+
+local NoFallDamageToggle = TabMisc:CreateToggle({
+    Name = "No Fall Damage (Anti Damage Jatuh)",
+    CurrentValue = _G.NoFallDamageEnabled,
+    Flag = "NoFallDamageToggle",
+    Callback = function(Value)
+        _G.NoFallDamageEnabled = Value
     end,
 })
