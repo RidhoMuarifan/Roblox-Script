@@ -105,7 +105,7 @@ _G.NoRagdollConnection = runService.Stepped:Connect(function()
     end
 end)
 
--- Logic Loop untuk Anti Fall Damage (Kecepatan Jatuh -75)
+-- Logic Loop untuk Anti Fall Damage (Kecepatan Jatuh -70)
 _G.NoFallDamageConnection = runService.Heartbeat:Connect(function()
     if _G.NoFallDamageEnabled then
         pcall(function()
@@ -114,9 +114,9 @@ _G.NoFallDamageConnection = runService.Heartbeat:Connect(function()
             local hum = char and char:FindFirstChildOfClass("Humanoid")
             
             if hrp and hum then
-                -- Menahan kecepatan jatuh di -75 (turun cepat tapi aman)
-                if hrp.AssemblyLinearVelocity.Y < -75 then
-                    hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, -75, hrp.AssemblyLinearVelocity.Z)
+                -- Menahan kecepatan jatuh di -70 (turun cepat tapi aman)
+                if hrp.AssemblyLinearVelocity.Y < -70 then
+                    hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, -70, hrp.AssemblyLinearVelocity.Z)
                 end
 
                 -- Auto-get up ketika mendekati tanah
