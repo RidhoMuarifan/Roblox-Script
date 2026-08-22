@@ -1,6 +1,7 @@
 -- ========================================================
 -- FAST AUTO-SWING, INSTANT MINE
--- TAB DUPE: DUPE & UTILITIES (CAMERA NOCLIP, NO RAGDOLL, NO FALL DMG)
+-- TAB DUPE: DUPE & UTILITIES
+-- TAB INVENTORY: LIVE BACKPACK CHECKER (AUTO GROUPING)
 -- (OBSIDIAN UI VERSION - NEFTISH MAM V1)
 -- ========================================================
 
@@ -38,7 +39,6 @@ local State = {
     DupeDelay = 2.0
 }
 
--- Simpan status ProximityPrompt asli untuk pemulihan
 local originalPrompts = {}
 
 -- Buat Window UI
@@ -55,6 +55,7 @@ local Window = Library:CreateWindow({
 -- ==========================================
 local MainTab = Window:AddTab("Main", "pickaxe")
 local DupeTab = Window:AddTab("Dupe", "copy")
+local InvTab = Window:AddTab("Inventory", "package")
 local SettingsTab = Window:AddTab("Settings", "sliders-horizontal")
 
 -- ------------------------------------------
@@ -65,47 +66,25 @@ local SwingBox = MainTab:AddLeftGroupbox("Auto Swing", "zap")
 SwingBox:AddToggle("EnableAutoSwing", {
     Text = "Auto Swing",
     Default = false,
-    Callback = function(Value)
-        State.AutoSwing = Value
-    end,
+    Callback = function(Value) State.AutoSwing = Value end,
 })
 
 SwingBox:AddSlider("BurstCountSlider", {
     Text = "Hit Speed (Burst)",
-    Default = 6,
-    Min = 1,
-    Max = 15,
-    Rounding = 0,
-    Compact = false,
-    Callback = function(Value)
-        State.BurstCount = Value
-    end,
+    Default = 6, Min = 1, Max = 15, Rounding = 0, Compact = false,
+    Callback = function(Value) State.BurstCount = Value end,
 })
 
 SwingBox:AddSlider("ReachSlider", {
     Text = "Hit Reach Distance",
-    Default = 12,
-    Min = 5,
-    Max = 30,
-    Rounding = 0,
-    Suffix = " studs",
-    Compact = false,
-    Callback = function(Value)
-        State.ReachDistance = Value
-    end,
+    Default = 12, Min = 5, Max = 30, Rounding = 0, Suffix = " studs", Compact = false,
+    Callback = function(Value) State.ReachDistance = Value end,
 })
 
 SwingBox:AddSlider("CooldownSlider", {
     Text = "Swing Cooldown",
-    Default = 3,
-    Min = 1,
-    Max = 20,
-    Rounding = 0,
-    Suffix = " ms",
-    Compact = false,
-    Callback = function(Value)
-        State.SwingCooldown = Value / 100
-    end,
+    Default = 3, Min = 1, Max = 20, Rounding = 0, Suffix = " ms", Compact = false,
+    Callback = function(Value) State.SwingCooldown = Value / 100 end,
 })
 
 local ExtraBox = MainTab:AddRightGroupbox("Extra Features", "star")
@@ -132,22 +111,17 @@ ExtraBox:AddToggle("EnableInstantMine", {
 ExtraBox:AddLabel("Menghilangkan durasi hold E batu/crystal.", true)
 
 -- ------------------------------------------
--- TAB 2: DUPE (Groupbox Kiri & Kanan Dipisah)
+-- TAB 2: DUPE
 -- ------------------------------------------
--- KIRI: Khusus Dupe
 local DupeBox = DupeTab:AddLeftGroupbox("Dupe", "copy")
 
 DupeBox:AddInput("DupeDelayInput", {
-    Default = "2.0",
-    Numeric = true,
-    Finished = false,
+    Default = "2.0", Numeric = true, Finished = false,
     Text = "Dupe Delay (Detik)",
     Tooltip = "Ketik delay dalam detik, contoh: 2, 2.5, atau 3.7",
     Callback = function(Value)
         local num = tonumber(Value)
-        if num then
-            State.DupeDelay = num
-        end
+        if num then State.DupeDelay = num end
     end,
 })
 
@@ -155,74 +129,88 @@ DupeBox:AddButton("Start Dupe", function()
     task.spawn(function()
         Library:Notify(string.format("Memulai Dupe (Reset) dalam %.1f detik...", State.DupeDelay), 3)
         task.wait(State.DupeDelay)
-        
         local char = LocalPlayer.Character
-        if char then
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                humanoid.Health = 0
-            end
+        if char and char:FindFirstChildOfClass("Humanoid") then
+            char:FindFirstChildOfClass("Humanoid").Health = 0
         end
     end)
 end)
 
--- KANAN: Khusus Utilities
 local UtilityBox = DupeTab:AddRightGroupbox("Utilities", "wrench")
 
-UtilityBox:AddToggle("EnableNoRagdoll", {
-    Text = "No Ragdoll",
-    Default = false,
-    Callback = function(Value)
-        State.NoRagdoll = Value
-    end,
-})
-
-UtilityBox:AddToggle("EnableNoFallDamage", {
-    Text = "No Fall Damage",
-    Default = false,
-    Callback = function(Value)
-        State.NoFallDamage = Value
-    end,
-})
-
+UtilityBox:AddToggle("EnableNoRagdoll", { Text = "No Ragdoll", Default = false, Callback = function(V) State.NoRagdoll = V end })
+UtilityBox:AddToggle("EnableNoFallDamage", { Text = "No Fall Damage", Default = false, Callback = function(V) State.NoFallDamage = V end })
 UtilityBox:AddDivider()
-
--- Camera Noclip Dipindahkan ke Utilities
 UtilityBox:AddToggle("EnableCameraNoclip", {
-    Text = "Camera Noclip",
-    Default = false,
+    Text = "Camera Noclip", Default = false,
     Callback = function(Value)
         State.CameraNoclip = Value
         if not Value then
-            pcall(function()
-                LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
-            end)
+            pcall(function() LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom end)
         end
     end,
 })
 
-UtilityBox:AddLabel("Kamera menembus dinding/boulder.", true)
+-- ------------------------------------------
+-- TAB 3: INVENTORY (BACKPACK CHECKER INTEGRATED)
+-- ------------------------------------------
+local InvBox = InvTab:AddLeftGroupbox("Isi Backpack (Auto-Group)", "package")
+local ItemLabels = {}
+
+-- Membersihkan tag [xxx.xkg]
+local function cleanItemName(fullName)
+    return fullName:gsub("%s*%[%d+%.?%d*kg%]", "")
+end
+
+local function updateBackpackUI()
+    -- Sembunyikan label lama
+    for _, lbl in ipairs(ItemLabels) do
+        lbl:SetText("")
+    end
+
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if not backpack then return end
+
+    local itemCounts = {}
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item:IsA("Tool") then
+            local cleanName = cleanItemName(item.Name)
+            itemCounts[cleanName] = (itemCounts[cleanName] or 0) + 1
+        end
+    end
+
+    local index = 1
+    for name, count in pairs(itemCounts) do
+        local textString = string.format("%s [x%d]", name, count)
+        
+        if not ItemLabels[index] then
+            ItemLabels[index] = InvBox:AddLabel(textString)
+        else
+            ItemLabels[index]:SetText(textString)
+        end
+        index = index + 1
+    end
+
+    if index == 1 then
+        if not ItemLabels[1] then
+            ItemLabels[1] = InvBox:AddLabel("(Backpack Kosong)")
+        else
+            ItemLabels[1]:SetText("(Backpack Kosong)")
+        end
+    end
+end
 
 -- ------------------------------------------
--- TAB 3: SETTINGS
+-- TAB 4: SETTINGS
 -- ------------------------------------------
 local MenuGroup = SettingsTab:AddLeftGroupbox("Menu Settings", "wrench")
-
-MenuGroup:AddLabel("Menu Bind"):AddKeyPicker("MenuKeybind", {
-    Default = "RightControl",
-    NoUI = true,
-    Text = "Menu keybind",
-})
-
-MenuGroup:AddButton("Unload Script", function()
-    Library:Unload()
-end)
+MenuGroup:AddLabel("Menu Bind"):AddKeyPicker("MenuKeybind", { Default = "RightControl", NoUI = true, Text = "Menu keybind" })
+MenuGroup:AddButton("Unload Script", function() Library:Unload() end)
 
 SaveManager:SetLibrary(Library)
 SaveManager:SetFolder("Universe/FastDig")
 ThemeManager:SetLibrary(Library)
 ThemeManager:SetFolder("Universe/FastDig")
-
 ThemeManager:ApplyToTab(SettingsTab)
 SaveManager:BuildConfigSection(SettingsTab)
 
@@ -232,19 +220,14 @@ SaveManager:BuildConfigSection(SettingsTab)
 local function getPickaxe()
     local char = LocalPlayer.Character
     if not char then return nil end
-
     local tool = char:FindFirstChildOfClass("Tool")
     if tool then return tool end
-
     local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
     if backpack then
         local bgTool = backpack:FindFirstChildOfClass("Tool")
-        if bgTool then
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                humanoid:EquipTool(bgTool)
-                return bgTool
-            end
+        if bgTool and char:FindFirstChildOfClass("Humanoid") then
+            char:FindFirstChildOfClass("Humanoid"):EquipTool(bgTool)
+            return bgTool
         end
     end
     return nil
@@ -254,23 +237,16 @@ local function applyInstantMine()
     local char = LocalPlayer.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return end
-
     for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") then
-            local parent = obj.Parent
-            if parent and parent:IsA("BasePart") then
-                if (parent.Position - root.Position).Magnitude <= 60 then
-                    if not originalPrompts[obj] then
-                        originalPrompts[obj] = {
-                            HoldDuration = obj.HoldDuration,
-                            RequiresLineOfSight = obj.RequiresLineOfSight
-                        }
-                    end
-                    pcall(function()
-                        obj.HoldDuration = 0
-                        obj.RequiresLineOfSight = false
-                    end)
+        if obj:IsA("ProximityPrompt") and obj.Parent and obj.Parent:IsA("BasePart") then
+            if (obj.Parent.Position - root.Position).Magnitude <= 60 then
+                if not originalPrompts[obj] then
+                    originalPrompts[obj] = { HoldDuration = obj.HoldDuration, RequiresLineOfSight = obj.RequiresLineOfSight }
                 end
+                pcall(function()
+                    obj.HoldDuration = 0
+                    obj.RequiresLineOfSight = false
+                end)
             end
         end
     end
@@ -284,7 +260,6 @@ local loopConnection
 loopConnection = RunService.Heartbeat:Connect(function()
     local now = os.clock()
 
-    -- 1. Camera Noclip
     if State.CameraNoclip then
         pcall(function()
             if LocalPlayer.DevCameraOcclusionMode ~= Enum.DevCameraOcclusionMode.Invisicam then
@@ -293,7 +268,6 @@ loopConnection = RunService.Heartbeat:Connect(function()
         end)
     end
 
-    -- 2. Instant Mine
     if State.InstantMine and (now - lastInstantCheck >= 0.25) then
         lastInstantCheck = now
         applyInstantMine()
@@ -301,56 +275,24 @@ loopConnection = RunService.Heartbeat:Connect(function()
 
     local char = LocalPlayer.Character
     if not char then return end
-
     local root = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChildOfClass("Humanoid")
 
-    -- 3. No Ragdoll Logic
-    if State.NoRagdoll or State.NoFallDamage then
-        if hum then
-            pcall(function()
-                local state = hum:GetState()
-                if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Physics then
-                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-                end
-                if hum.PlatformStand then
-                    hum.PlatformStand = false
-                end
-            end)
-        end
-    end
-
-    -- 4. No Fall Damage Logic
-    if State.NoFallDamage and root and hum then
+    if (State.NoRagdoll or State.NoFallDamage) and hum then
         pcall(function()
-            if root.AssemblyLinearVelocity.Y < -70 then
-                root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -70, root.AssemblyLinearVelocity.Z)
+            local state = hum:GetState()
+            if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Physics then
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
             end
-
-            local raycastParams = RaycastParams.new()
-            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-            raycastParams.FilterDescendantsInstances = {char}
-
-            local rayResult = Workspace:Raycast(root.Position, Vector3.new(0, -10, 0), raycastParams)
-            if rayResult then
-                local state = hum:GetState()
-                if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown or hum.PlatformStand then
-                    hum.PlatformStand = false
-                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-                end
-            end
+            if hum.PlatformStand then hum.PlatformStand = false end
         end)
     end
 
-    if not root then return end
-
-    -- 5. Auto Swing
-    if State.AutoSwing and DigRequest and (now - lastSwing >= State.SwingCooldown) then
+    if State.AutoSwing and DigRequest and (now - lastSwing >= State.SwingCooldown) and root then
         local tool = getPickaxe()
         if tool then
             lastSwing = now
             local targetPos = root.Position + (root.CFrame.LookVector * State.ReachDistance)
-
             for i = 1, State.BurstCount do
                 DigRequest:FireServer(tool.Name, targetPos)
             end
@@ -358,13 +300,23 @@ loopConnection = RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Handle Cleanup saat UI Unload
-Library:OnUnload(function()
-    if loopConnection then
-        loopConnection:Disconnect()
-        loopConnection = nil
-    end
+-- Listener Backpack Otomatis
+local function setupBackpackListener()
+    local backpack = LocalPlayer:WaitForChild("Backpack")
+    updateBackpackUI()
+    backpack.ChildAdded:Connect(updateBackpackUI)
+    backpack.ChildRemoved:Connect(updateBackpackUI)
+end
 
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    setupBackpackListener()
+end)
+
+setupBackpackListener()
+
+Library:OnUnload(function()
+    if loopConnection then loopConnection:Disconnect() end
     for prompt, saved in pairs(originalPrompts) do
         if prompt and prompt.Parent then
             pcall(function()
@@ -374,8 +326,4 @@ Library:OnUnload(function()
         end
     end
     table.clear(originalPrompts)
-
-    pcall(function()
-        LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
-    end)
 end)
