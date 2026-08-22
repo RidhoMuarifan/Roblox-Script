@@ -1,0 +1,381 @@
+-- ========================================================
+-- FAST AUTO-SWING, INSTANT MINE
+-- TAB DUPE: DUPE & UTILITIES (CAMERA NOCLIP, NO RAGDOLL, NO FALL DMG)
+-- (OBSIDIAN UI VERSION - NEFTISH MAM V1)
+-- ========================================================
+
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Mencari Remote DigRequest
+local function findRemote(name)
+    local folder = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:WaitForChild("Remotes", 10)
+    if not folder then return nil end
+    return folder:FindFirstChild(name) or folder:WaitForChild(name, 5)
+end
+
+local DigRequest = findRemote("DigRequest")
+
+-- ⚙️ Variabel State
+local State = {
+    AutoSwing = false,
+    CameraNoclip = false,
+    InstantMine = false,
+    NoRagdoll = false,
+    NoFallDamage = false,
+    BurstCount = 6,
+    ReachDistance = 12,
+    SwingCooldown = 0.03,
+    DupeDelay = 2.0
+}
+
+-- Simpan status ProximityPrompt asli untuk pemulihan
+local originalPrompts = {}
+
+-- Buat Window UI
+local Window = Library:CreateWindow({
+    Title = "Neftish MaM v1",
+    Footer = "Neftish Mine A Mountain Dupe",
+    AutoShow = true,
+    NotifySide = "Right",
+    ShowCustomCursor = false,
+})
+
+-- ==========================================
+-- PEMBUATAN TAB UI
+-- ==========================================
+local MainTab = Window:AddTab("Main", "pickaxe")
+local DupeTab = Window:AddTab("Dupe", "copy")
+local SettingsTab = Window:AddTab("Settings", "sliders-horizontal")
+
+-- ------------------------------------------
+-- TAB 1: MAIN
+-- ------------------------------------------
+local SwingBox = MainTab:AddLeftGroupbox("Auto Swing", "zap")
+
+SwingBox:AddToggle("EnableAutoSwing", {
+    Text = "Auto Swing",
+    Default = false,
+    Callback = function(Value)
+        State.AutoSwing = Value
+    end,
+})
+
+SwingBox:AddSlider("BurstCountSlider", {
+    Text = "Hit Speed (Burst)",
+    Default = 6,
+    Min = 1,
+    Max = 15,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        State.BurstCount = Value
+    end,
+})
+
+SwingBox:AddSlider("ReachSlider", {
+    Text = "Hit Reach Distance",
+    Default = 12,
+    Min = 5,
+    Max = 30,
+    Rounding = 0,
+    Suffix = " studs",
+    Compact = false,
+    Callback = function(Value)
+        State.ReachDistance = Value
+    end,
+})
+
+SwingBox:AddSlider("CooldownSlider", {
+    Text = "Swing Cooldown",
+    Default = 3,
+    Min = 1,
+    Max = 20,
+    Rounding = 0,
+    Suffix = " ms",
+    Compact = false,
+    Callback = function(Value)
+        State.SwingCooldown = Value / 100
+    end,
+})
+
+local ExtraBox = MainTab:AddRightGroupbox("Extra Features", "star")
+
+ExtraBox:AddToggle("EnableInstantMine", {
+    Text = "Instant Mine / Prompt",
+    Default = false,
+    Callback = function(Value)
+        State.InstantMine = Value
+        if not Value then
+            for prompt, saved in pairs(originalPrompts) do
+                if prompt and prompt.Parent then
+                    pcall(function()
+                        prompt.HoldDuration = saved.HoldDuration
+                        prompt.RequiresLineOfSight = saved.RequiresLineOfSight
+                    end)
+                end
+            end
+            table.clear(originalPrompts)
+        end
+    end,
+})
+
+ExtraBox:AddLabel("Menghilangkan durasi hold E batu/crystal.", true)
+
+-- ------------------------------------------
+-- TAB 2: DUPE (Groupbox Kiri & Kanan Dipisah)
+-- ------------------------------------------
+-- KIRI: Khusus Dupe
+local DupeBox = DupeTab:AddLeftGroupbox("Dupe", "copy")
+
+DupeBox:AddInput("DupeDelayInput", {
+    Default = "2.0",
+    Numeric = true,
+    Finished = false,
+    Text = "Dupe Delay (Detik)",
+    Tooltip = "Ketik delay dalam detik, contoh: 2, 2.5, atau 3.7",
+    Callback = function(Value)
+        local num = tonumber(Value)
+        if num then
+            State.DupeDelay = num
+        end
+    end,
+})
+
+DupeBox:AddButton("Start Dupe", function()
+    task.spawn(function()
+        Library:Notify(string.format("Memulai Dupe (Reset) dalam %.1f detik...", State.DupeDelay), 3)
+        task.wait(State.DupeDelay)
+        
+        local char = LocalPlayer.Character
+        if char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.Health = 0
+            end
+        end
+    end)
+end)
+
+-- KANAN: Khusus Utilities
+local UtilityBox = DupeTab:AddRightGroupbox("Utilities", "wrench")
+
+UtilityBox:AddToggle("EnableNoRagdoll", {
+    Text = "No Ragdoll",
+    Default = false,
+    Callback = function(Value)
+        State.NoRagdoll = Value
+    end,
+})
+
+UtilityBox:AddToggle("EnableNoFallDamage", {
+    Text = "No Fall Damage",
+    Default = false,
+    Callback = function(Value)
+        State.NoFallDamage = Value
+    end,
+})
+
+UtilityBox:AddDivider()
+
+-- Camera Noclip Dipindahkan ke Utilities
+UtilityBox:AddToggle("EnableCameraNoclip", {
+    Text = "Camera Noclip",
+    Default = false,
+    Callback = function(Value)
+        State.CameraNoclip = Value
+        if not Value then
+            pcall(function()
+                LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
+            end)
+        end
+    end,
+})
+
+UtilityBox:AddLabel("Kamera menembus dinding/boulder.", true)
+
+-- ------------------------------------------
+-- TAB 3: SETTINGS
+-- ------------------------------------------
+local MenuGroup = SettingsTab:AddLeftGroupbox("Menu Settings", "wrench")
+
+MenuGroup:AddLabel("Menu Bind"):AddKeyPicker("MenuKeybind", {
+    Default = "RightControl",
+    NoUI = true,
+    Text = "Menu keybind",
+})
+
+MenuGroup:AddButton("Unload Script", function()
+    Library:Unload()
+end)
+
+SaveManager:SetLibrary(Library)
+SaveManager:SetFolder("Universe/FastDig")
+ThemeManager:SetLibrary(Library)
+ThemeManager:SetFolder("Universe/FastDig")
+
+ThemeManager:ApplyToTab(SettingsTab)
+SaveManager:BuildConfigSection(SettingsTab)
+
+-- ==========================================
+-- HELPER & LOGIC LOOP
+-- ==========================================
+local function getPickaxe()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+
+    local tool = char:FindFirstChildOfClass("Tool")
+    if tool then return tool end
+
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if backpack then
+        local bgTool = backpack:FindFirstChildOfClass("Tool")
+        if bgTool then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:EquipTool(bgTool)
+                return bgTool
+            end
+        end
+    end
+    return nil
+end
+
+local function applyInstantMine()
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") then
+            local parent = obj.Parent
+            if parent and parent:IsA("BasePart") then
+                if (parent.Position - root.Position).Magnitude <= 60 then
+                    if not originalPrompts[obj] then
+                        originalPrompts[obj] = {
+                            HoldDuration = obj.HoldDuration,
+                            RequiresLineOfSight = obj.RequiresLineOfSight
+                        }
+                    end
+                    pcall(function()
+                        obj.HoldDuration = 0
+                        obj.RequiresLineOfSight = false
+                    end)
+                end
+            end
+        end
+    end
+end
+
+-- Loop Utama (Heartbeat)
+local lastSwing = 0
+local lastInstantCheck = 0
+local loopConnection
+
+loopConnection = RunService.Heartbeat:Connect(function()
+    local now = os.clock()
+
+    -- 1. Camera Noclip
+    if State.CameraNoclip then
+        pcall(function()
+            if LocalPlayer.DevCameraOcclusionMode ~= Enum.DevCameraOcclusionMode.Invisicam then
+                LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
+            end
+        end)
+    end
+
+    -- 2. Instant Mine
+    if State.InstantMine and (now - lastInstantCheck >= 0.25) then
+        lastInstantCheck = now
+        applyInstantMine()
+    end
+
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    local root = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+
+    -- 3. No Ragdoll Logic
+    if State.NoRagdoll or State.NoFallDamage then
+        if hum then
+            pcall(function()
+                local state = hum:GetState()
+                if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Physics then
+                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+                if hum.PlatformStand then
+                    hum.PlatformStand = false
+                end
+            end)
+        end
+    end
+
+    -- 4. No Fall Damage Logic
+    if State.NoFallDamage and root and hum then
+        pcall(function()
+            if root.AssemblyLinearVelocity.Y < -70 then
+                root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -70, root.AssemblyLinearVelocity.Z)
+            end
+
+            local raycastParams = RaycastParams.new()
+            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+            raycastParams.FilterDescendantsInstances = {char}
+
+            local rayResult = Workspace:Raycast(root.Position, Vector3.new(0, -10, 0), raycastParams)
+            if rayResult then
+                local state = hum:GetState()
+                if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown or hum.PlatformStand then
+                    hum.PlatformStand = false
+                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+            end
+        end)
+    end
+
+    if not root then return end
+
+    -- 5. Auto Swing
+    if State.AutoSwing and DigRequest and (now - lastSwing >= State.SwingCooldown) then
+        local tool = getPickaxe()
+        if tool then
+            lastSwing = now
+            local targetPos = root.Position + (root.CFrame.LookVector * State.ReachDistance)
+
+            for i = 1, State.BurstCount do
+                DigRequest:FireServer(tool.Name, targetPos)
+            end
+        end
+    end
+end)
+
+-- Handle Cleanup saat UI Unload
+Library:OnUnload(function()
+    if loopConnection then
+        loopConnection:Disconnect()
+        loopConnection = nil
+    end
+
+    for prompt, saved in pairs(originalPrompts) do
+        if prompt and prompt.Parent then
+            pcall(function()
+                prompt.HoldDuration = saved.HoldDuration
+                prompt.RequiresLineOfSight = saved.RequiresLineOfSight
+            end)
+        end
+    end
+    table.clear(originalPrompts)
+
+    pcall(function()
+        LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
+    end)
+end)
