@@ -1,6 +1,6 @@
 -- ========================================================
--- DUPE NUKER CRYSTAL, INSTANT MINE, DUPE & CRYSTAL FARM HUB
--- OBSIDIAN UI VERSION (INTEGRATED EXPERIMENT)
+-- DUPE NUKER CRYSTAL, INSTANT MINE, DUPE & AUTO CRYSTAL HUB
+-- OBSIDIAN UI VERSION (RENAMED AUTO SELECT DROP)
 -- ========================================================
 
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
@@ -24,6 +24,7 @@ end
 
 local DigRequest = findRemote("DigRequest")
 local HoldComplete = findRemote("CrystalHoldComplete")
+local CrystalDropRequest = findRemote("CrystalDropRequest")
 
 -- ⚙️ Konfigurasi Global & State
 local State = {
@@ -53,6 +54,7 @@ local GLIDE_SPEED = 350
 local AIM_RATE = 9
 local RESPONSE = 200
 
+-- State Drop & Scanner World
 local ScannedCrystals = {}
 local DropdownMap = {}
 local SelectedTargetKey = nil
@@ -62,6 +64,13 @@ local CurrentGlideThread = nil
 local NoclipConnection = nil
 local InitialCFrame = nil
 
+-- State Selective Dropper
+local BackpackDropCrystals = {}
+local DropdownDropMap = {}
+local SelectedDropGroup = nil
+local DropAmount = 1
+local IsDropping = false
+
 local lastPickup = 0
 local claimed = {}
 local originalPrompts = {}
@@ -69,7 +78,8 @@ local originalPrompts = {}
 -- Alignment Mover Variables
 local MoverPosition, MoverOrientation, MoverAttachment
 
-local TIER_LIST = {"All", "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Empiris", "Pulsar", "Quasar"}
+-- Filter Tier Urutan Quasar Teratas -> Common Terbawah
+local TIER_LIST = {"All", "Quasar", "Pulsar", "Empiris", "Mythic", "Legendary", "Epic", "Rare", "Uncommon", "Common"}
 
 local pickupParams = OverlapParams.new()
 pickupParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -110,6 +120,17 @@ local function isCrystal(inst)
         if handle and (getAttr(handle, "Value") ~= nil or handle.Name:find("Crystal", 1, true) ~= nil) then
             return true
         end
+    end
+    return false
+end
+
+local function isCrystalTool(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local okValue, val = pcall(tool.GetAttribute, tool, "Value")
+    local okTier, tier = pcall(tool.GetAttribute, tool, "Tier")
+    
+    if (okValue and val ~= nil) or (okTier and tier ~= nil) or tool.Name:find("Crystal", 1, true) ~= nil then
+        return true
     end
     return false
 end
@@ -311,22 +332,27 @@ end
 
 local function scanWorld()
     table.clear(ScannedCrystals)
+    local processedInstances = {}
+
     local function processObject(child)
+        if not child then return end
+        local part = getCrystalPart(child) or child
+        
+        if processedInstances[part] then return end
+
         if isCrystal(child) then
+            processedInstances[part] = true
             local rawName = getAttr(child, "CrystalName") or child.Name
             local rarity = getAttr(child, "TierName") or "Crystal"
             
             if SelectedRarityFilter == "All" or rarity:lower() == SelectedRarityFilter:lower() then
                 local cleanName = string.format("[%s] %s", rarity, cleanItemName(rawName))
-                local part = getCrystalPart(child)
                 
-                if part then
-                    if not ScannedCrystals[cleanName] then
-                        ScannedCrystals[cleanName] = { Count = 1, Instances = {part} }
-                    else
-                        ScannedCrystals[cleanName].Count = ScannedCrystals[cleanName].Count + 1
-                        table.insert(ScannedCrystals[cleanName].Instances, part)
-                    end
+                if not ScannedCrystals[cleanName] then
+                    ScannedCrystals[cleanName] = { Count = 1, Instances = {part} }
+                else
+                    ScannedCrystals[cleanName].Count = ScannedCrystals[cleanName].Count + 1
+                    table.insert(ScannedCrystals[cleanName].Instances, part)
                 end
             end
         end
@@ -344,14 +370,101 @@ local function scanWorld()
         end
     end
 
-    searchContainer(Workspace)
-    searchContainer(Workspace:FindFirstChild("DroppedCrystals"))
-    searchContainer(Workspace:FindFirstChild("Crystals"))
+    local dropped = Workspace:FindFirstChild("DroppedCrystals")
+    local crystals = Workspace:FindFirstChild("Crystals")
     local things = Workspace:FindFirstChild("Things")
+
+    if dropped then searchContainer(dropped) end
+    if crystals then searchContainer(crystals) end
     if things then
         searchContainer(things:FindFirstChild("DroppedCrystals"))
         searchContainer(things:FindFirstChild("Crystals"))
     end
+
+    for _, child in ipairs(Workspace:GetChildren()) do
+        if child ~= dropped and child ~= crystals and child ~= things then
+            processObject(child)
+        end
+    end
+end
+
+-- ==========================================
+-- SELECTIVE DROPPER LOGIC
+-- ==========================================
+local function scanBackpackForDrop()
+    table.clear(BackpackDropCrystals)
+    
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    local character = LocalPlayer.Character
+    
+    local function processContainer(container)
+        if not container then return end
+        for _, item in ipairs(container:GetChildren()) do
+            if isCrystalTool(item) then
+                local rawName = cleanItemName(item.Name)
+                local rarity = getAttr(item, "TierName")
+                
+                local formattedName
+                if rarity and rarity ~= "" then
+                    formattedName = string.format("[%s] %s", rarity, rawName)
+                else
+                    formattedName = rawName
+                end
+                
+                local fullName = item.Name
+                
+                if not BackpackDropCrystals[formattedName] then
+                    BackpackDropCrystals[formattedName] = { Count = 1, FullNames = {fullName} }
+                else
+                    BackpackDropCrystals[formattedName].Count = BackpackDropCrystals[formattedName].Count + 1
+                    table.insert(BackpackDropCrystals[formattedName].FullNames, fullName)
+                end
+            end
+        end
+    end
+
+    processContainer(backpack)
+    processContainer(character)
+end
+
+local function dropCrystalsViaRemote(groupName, amount)
+    if not CrystalDropRequest then
+        Library:Notify("Error: Remote 'CrystalDropRequest' tidak ditemukan!", 3)
+        return
+    end
+
+    local data = BackpackDropCrystals[groupName]
+    if not data or #data.FullNames == 0 then
+        Library:Notify("Gagal Drop: Kristal tidak ditemukan di backpack!", 3)
+        return
+    end
+
+    local totalAvailable = #data.FullNames
+    local toDrop = math.min(amount, totalAvailable)
+    
+    IsDropping = true
+    local droppedCount = 0
+
+    task.spawn(function()
+        for i = 1, toDrop do
+            if not IsDropping then break end
+
+            local fullName = data.FullNames[#data.FullNames]
+            if fullName then
+                pcall(function()
+                    CrystalDropRequest:FireServer(fullName)
+                end)
+
+                droppedCount = droppedCount + 1
+                table.remove(data.FullNames, #data.FullNames)
+            end
+            
+            task.wait(0.05)
+        end
+
+        IsDropping = false
+        Library:Notify(string.format("Selesai Drop %d/x%d %s", droppedCount, totalAvailable, groupName), 3)
+    end)
 end
 
 -- ==========================================
@@ -367,6 +480,7 @@ local Window = Library:CreateWindow({
 
 local MainTab = Window:AddTab("Main", "pickaxe")
 local DupeTab = Window:AddTab("Dupe", "copy")
+local AutoCrystalTab = Window:AddTab("Auto Crystal", "gem")
 local InvTab = Window:AddTab("Inventory", "package")
 local SettingsTab = Window:AddTab("Settings", "sliders-horizontal")
 
@@ -423,7 +537,7 @@ ExtraBox:AddToggle("EnableInstantMine", {
 ExtraBox:AddLabel("Menghilangkan durasi hold E batu/crystal.", true)
 
 -- ------------------------------------------
--- TAB 2: DUPE & AUTO PICKUP CRYSTAL
+-- TAB 2: DUPE
 -- ------------------------------------------
 local DupeBox = DupeTab:AddLeftGroupbox("Dupe", "copy")
 
@@ -448,8 +562,77 @@ DupeBox:AddButton("Start Dupe", function()
     end)
 end)
 
--- Groupbox Kanan Tab Dupe: Auto Pickup Crystal
-local FarmBox = DupeTab:AddRightGroupbox("Auto Pickup Crystal", "crosshair")
+-- ------------------------------------------
+-- TAB 3: AUTO CRYSTAL (DROPPER & PICKUP)
+-- ------------------------------------------
+-- Groupbox Kiri: Auto Select Drop
+local DropBox = AutoCrystalTab:AddLeftGroupbox("Auto Select Drop", "arrow-down-from-line")
+local DropDropdownObj
+
+DropBox:AddButton("Scan Backpack Drop", function()
+    scanBackpackForDrop()
+    table.clear(DropdownDropMap)
+    
+    local options = {}
+    for nameKey, data in pairs(BackpackDropCrystals) do
+        local optionStr = string.format("%s [%dx]", nameKey, data.Count)
+        table.insert(options, optionStr)
+        DropdownDropMap[optionStr] = nameKey
+    end
+    
+    if #options == 0 then
+        table.insert(options, "(Backpack Kosong)")
+        SelectedDropGroup = nil
+    end
+    
+    if DropDropdownObj then
+        DropDropdownObj:SetValues(options)
+        DropDropdownObj:SetValue(options[1])
+    end
+    
+    Library:Notify(string.format("Ditemukan %d jenis kristal di tas", #options), 3)
+end)
+
+DropDropdownObj = DropBox:AddDropdown("SelectiveDropDropdown", {
+    Values = {"(Tekan Scan Backpack Drop)"},
+    Default = 1,
+    Multi = false,
+    Text = "Pilih Kristal Drop",
+    Callback = function(Option)
+        SelectedDropGroup = DropdownDropMap[Option] or Option
+    end,
+})
+
+DropBox:AddInput("DropAmountInput", {
+    Default = "1", Numeric = true, Finished = false,
+    Text = "Jumlah Drop",
+    Tooltip = "Masukkan jumlah kristal yang mau dibuang",
+    Callback = function(Value)
+        local num = tonumber(Value)
+        if num and num > 0 then
+            DropAmount = math.floor(num)
+        else
+            DropAmount = 1
+        end
+    end,
+})
+
+DropBox:AddButton("Drop Crystal", function()
+    if IsDropping then
+        Library:Notify("Tunggu proses drop selesai!", 2)
+        return
+    end
+
+    if not SelectedDropGroup or not BackpackDropCrystals[SelectedDropGroup] then
+        Library:Notify("Error: Pilih kristal dari dropdown terlebih dahulu!", 3)
+        return
+    end
+
+    dropCrystalsViaRemote(SelectedDropGroup, DropAmount)
+end)
+
+-- Groupbox Kanan: Auto Pickup Crystal
+local FarmBox = AutoCrystalTab:AddRightGroupbox("Auto Pickup Crystal", "crosshair")
 
 FarmBox:AddDropdown("RarityFilterDropdown", {
     Values = TIER_LIST,
@@ -571,7 +754,7 @@ FarmBox:AddToggle("StartGlideFarmToggle", {
 })
 
 -- ------------------------------------------
--- TAB 3: INVENTORY & UTILITIES
+-- TAB 4: INVENTORY & UTILITIES
 -- ------------------------------------------
 local InvBox = InvTab:AddLeftGroupbox("Isi Backpack (Auto-Group)", "package")
 local ItemLabels = {}
@@ -629,7 +812,7 @@ UtilityBox:AddToggle("EnableCameraNoclip", {
 })
 
 -- ------------------------------------------
--- TAB 4: SETTINGS
+-- TAB 5: SETTINGS
 -- ------------------------------------------
 local MenuGroup = SettingsTab:AddLeftGroupbox("Menu Settings", "wrench")
 MenuGroup:AddLabel("Menu Bind"):AddKeyPicker("MenuKeybind", { Default = "RightControl", NoUI = true, Text = "Menu keybind" })
