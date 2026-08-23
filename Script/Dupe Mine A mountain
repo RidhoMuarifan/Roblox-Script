@@ -1,8 +1,6 @@
 -- ========================================================
--- FAST AUTO-SWING, INSTANT MINE
--- TAB DUPE: DUPE & UTILITIES
--- TAB INVENTORY: LIVE BACKPACK CHECKER (AUTO GROUPING)
--- (OBSIDIAN UI VERSION - NEFTISH MAM V1)
+-- DUPE NUKER CRYSTAL, INSTANT MINE, DUPE & CRYSTAL FARM HUB
+-- OBSIDIAN UI VERSION (INTEGRATED EXPERIMENT)
 -- ========================================================
 
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
@@ -17,7 +15,7 @@ local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Mencari Remote DigRequest
+-- Mencari Remote
 local function findRemote(name)
     local folder = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:WaitForChild("Remotes", 10)
     if not folder then return nil end
@@ -25,8 +23,9 @@ local function findRemote(name)
 end
 
 local DigRequest = findRemote("DigRequest")
+local HoldComplete = findRemote("CrystalHoldComplete")
 
--- ⚙️ Variabel State
+-- ⚙️ Konfigurasi Global & State
 local State = {
     AutoSwing = false,
     CameraNoclip = false,
@@ -39,20 +38,333 @@ local State = {
     DupeDelay = 2.0
 }
 
+-- Parameter Glide & Area Pickup
+local PICK = {
+    range = 13,
+    cooldown = 0.04,
+    restore = 0.2,
+    burst = 8,
+    retry = 0.15,
+    forget = 5,
+    pad = 4,
+}
+
+local GLIDE_SPEED = 350
+local AIM_RATE = 9
+local RESPONSE = 200
+
+local ScannedCrystals = {}
+local DropdownMap = {}
+local SelectedTargetKey = nil
+local SelectedRarityFilter = "All"
+local IsGliding = false
+local CurrentGlideThread = nil
+local NoclipConnection = nil
+local InitialCFrame = nil
+
+local lastPickup = 0
+local claimed = {}
 local originalPrompts = {}
 
--- Buat Window UI
+-- Alignment Mover Variables
+local MoverPosition, MoverOrientation, MoverAttachment
+
+local TIER_LIST = {"All", "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Empiris", "Pulsar", "Quasar"}
+
+local pickupParams = OverlapParams.new()
+pickupParams.FilterType = Enum.RaycastFilterType.Exclude
+pcall(function()
+    pickupParams.MaxParts = 300
+    pickupParams.RespectCanCollide = false
+end)
+
+-- ==========================================
+-- HELPER FUNCTIONS
+-- ==========================================
+local function getRoot()
+    local char = LocalPlayer.Character
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function cleanItemName(fullName)
+    return fullName:gsub("%s*%[%d+%.?%d*kg%]", "")
+end
+
+local function getAttr(inst, name)
+    local ok, val = pcall(inst.GetAttribute, inst, name)
+    return ok and val or nil
+end
+
+local function isCrystal(inst)
+    if not inst then return false end
+    if inst:IsA("BasePart") then
+        if getAttr(inst, "Value") ~= nil or getAttr(inst, "CrystalName") ~= nil or inst.Name:find("Crystal", 1, true) ~= nil then
+            return true
+        end
+    end
+    if inst:IsA("Model") or inst:IsA("Tool") then
+        if getAttr(inst, "Value") ~= nil or getAttr(inst, "CrystalName") ~= nil or inst.Name:find("Crystal", 1, true) ~= nil then
+            return true
+        end
+        local handle = inst:FindFirstChild("Handle") or inst:FindFirstChildWhichIsA("BasePart")
+        if handle and (getAttr(handle, "Value") ~= nil or handle.Name:find("Crystal", 1, true) ~= nil) then
+            return true
+        end
+    end
+    return false
+end
+
+local function getCrystalPart(inst)
+    if inst:IsA("BasePart") then return inst end
+    if inst:IsA("Model") or inst:IsA("Tool") then
+        return inst.PrimaryPart or inst:FindFirstChild("Handle") or inst:FindFirstChildWhichIsA("BasePart")
+    end
+    return nil
+end
+
+local function crystalPrompt(inst)
+    if not inst then return nil end
+    local ok, prompt = pcall(inst.FindFirstChildOfClass, inst, "ProximityPrompt")
+    if not (ok and prompt) then
+        ok, prompt = pcall(inst.FindFirstChildWhichIsA, inst, "ProximityPrompt", true)
+    end
+    return (ok and prompt) and prompt or nil
+end
+
+-- ==========================================
+-- NOCLIP & GLIDE ENGINE
+-- ==========================================
+local function enableNoclip()
+    if NoclipConnection then return end
+    NoclipConnection = RunService.Stepped:Connect(function()
+        local char = LocalPlayer.Character
+        if char and IsGliding then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+local function disableNoclip()
+    if NoclipConnection then
+        NoclipConnection:Disconnect()
+        NoclipConnection = nil
+    end
+end
+
+local function detachMovers()
+    if MoverPosition then pcall(function() MoverPosition:Destroy() end) MoverPosition = nil end
+    if MoverOrientation then pcall(function() MoverOrientation:Destroy() end) MoverOrientation = nil end
+    if MoverAttachment then pcall(function() MoverAttachment:Destroy() end) MoverAttachment = nil end
+end
+
+local function attachMovers(root)
+    detachMovers()
+    pcall(function()
+        local att = Instance.new("Attachment")
+        att.Name = "CustomGlideAtt"
+        att.Parent = root
+
+        local pos = Instance.new("AlignPosition")
+        pos.Mode = Enum.PositionAlignmentMode.OneAttachment
+        pos.Attachment0 = att
+        pos.MaxForce = 1e7
+        pos.Responsiveness = RESPONSE
+        pos.Position = root.Position
+        pos.Parent = root
+
+        local ori = Instance.new("AlignOrientation")
+        ori.Mode = Enum.OrientationAlignmentMode.OneAttachment
+        ori.Attachment0 = att
+        ori.MaxTorque = 1e7
+        ori.Responsiveness = RESPONSE
+        ori.CFrame = root.CFrame.Rotation
+        ori.Parent = root
+
+        MoverAttachment = att
+        MoverPosition = pos
+        MoverOrientation = ori
+    end)
+end
+
+local function glideToCFrame(targetCFrame, deltaTime)
+    local root = getRoot()
+    if not root then return end
+    
+    if not MoverPosition or MoverPosition.Parent ~= root then
+        attachMovers(root)
+    end
+
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then hum.PlatformStand = true end
+
+    local currentPos = MoverPosition.Position
+    local delta = targetCFrame.Position - currentPos
+    local span = GLIDE_SPEED * deltaTime
+
+    local nextPos
+    if delta.Magnitude <= math.max(span, 0.35) then
+        nextPos = targetCFrame.Position
+    else
+        nextPos = currentPos + (delta.Unit * span)
+    end
+
+    MoverPosition.Position = nextPos
+    MoverOrientation.CFrame = MoverOrientation.CFrame:Lerp(targetCFrame.Rotation, 1 - math.exp(-AIM_RATE * deltaTime))
+end
+
+local function stopGlide()
+    detachMovers()
+    disableNoclip()
+    IsGliding = false
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.PlatformStand = false
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+    end
+end
+
+-- ==========================================
+-- AUTO PICKUP AREA
+-- ==========================================
+local function firePrompt(prompt)
+    pcall(function()
+        prompt.HoldDuration = 0
+        prompt.RequiresLineOfSight = false
+        prompt.Enabled = true
+        prompt.MaxActivationDistance = 1000
+    end)
+
+    local fired = false
+    if typeof(fireproximityprompt) == "function" then
+        fired = pcall(fireproximityprompt, prompt, 1)
+        if not fired then fired = pcall(fireproximityprompt, prompt) end
+    end
+
+    if not fired then
+        fired = pcall(function()
+            prompt:InputHoldBegin()
+            prompt:InputHoldEnd()
+        end)
+    end
+
+    return fired
+end
+
+local function grabCrystalOriginal(inst)
+    local sent = false
+    if HoldComplete then
+        sent = pcall(function() HoldComplete:FireServer(inst) end)
+    end
+    local prompt = crystalPrompt(inst)
+    if prompt and prompt.Parent and firePrompt(prompt) then
+        sent = true
+    end
+    return sent
+end
+
+local function executeAreaPickup()
+    local now = os.clock()
+    if now - lastPickup < PICK.cooldown then return end
+
+    local root = getRoot()
+    if not root then return end
+
+    for inst, stamp in pairs(claimed) do
+        if now - stamp >= PICK.forget or not inst.Parent then
+            claimed[inst] = nil
+        end
+    end
+
+    pickupParams.FilterDescendantsInstances = { LocalPlayer.Character or LocalPlayer }
+
+    local ok, hits = pcall(function()
+        return Workspace:GetPartBoundsInRadius(root.Position, PICK.range + PICK.pad, pickupParams)
+    end)
+
+    if not ok or not hits then return end
+
+    local grabs = 0
+    for _, part in ipairs(hits) do
+        if grabs >= PICK.burst then break end
+
+        if part and part.Parent and isCrystal(part) and getAttr(part, "Collected") ~= true then
+            local claimStamp = claimed[part]
+            if not claimStamp or (now - claimStamp >= PICK.retry) then
+                claimed[part] = now
+                if grabCrystalOriginal(part) then
+                    grabs = grabs + 1
+                end
+            end
+        end
+    end
+
+    if grabs > 0 then
+        lastPickup = now
+    end
+end
+
+local function scanWorld()
+    table.clear(ScannedCrystals)
+    local function processObject(child)
+        if isCrystal(child) then
+            local rawName = getAttr(child, "CrystalName") or child.Name
+            local rarity = getAttr(child, "TierName") or "Crystal"
+            
+            if SelectedRarityFilter == "All" or rarity:lower() == SelectedRarityFilter:lower() then
+                local cleanName = string.format("[%s] %s", rarity, cleanItemName(rawName))
+                local part = getCrystalPart(child)
+                
+                if part then
+                    if not ScannedCrystals[cleanName] then
+                        ScannedCrystals[cleanName] = { Count = 1, Instances = {part} }
+                    else
+                        ScannedCrystals[cleanName].Count = ScannedCrystals[cleanName].Count + 1
+                        table.insert(ScannedCrystals[cleanName].Instances, part)
+                    end
+                end
+            end
+        end
+    end
+
+    local function searchContainer(container)
+        if not container then return end
+        for _, child in ipairs(container:GetChildren()) do
+            processObject(child)
+            if child:IsA("Folder") or child:IsA("Model") then
+                for _, inner in ipairs(child:GetChildren()) do
+                    processObject(inner)
+                end
+            end
+        end
+    end
+
+    searchContainer(Workspace)
+    searchContainer(Workspace:FindFirstChild("DroppedCrystals"))
+    searchContainer(Workspace:FindFirstChild("Crystals"))
+    local things = Workspace:FindFirstChild("Things")
+    if things then
+        searchContainer(things:FindFirstChild("DroppedCrystals"))
+        searchContainer(things:FindFirstChild("Crystals"))
+    end
+end
+
+-- ==========================================
+-- PEMBUATAN WINDOW & TAB UI (OBSIDIAN)
+-- ==========================================
 local Window = Library:CreateWindow({
     Title = "Neftish MaM v1",
-    Footer = "Neftish Mine A Mountain Dupe",
+    Footer = "Neftish Mine A Mountain Dupe & Farm",
     AutoShow = true,
     NotifySide = "Right",
     ShowCustomCursor = false,
 })
 
--- ==========================================
--- PEMBUATAN TAB UI
--- ==========================================
 local MainTab = Window:AddTab("Main", "pickaxe")
 local DupeTab = Window:AddTab("Dupe", "copy")
 local InvTab = Window:AddTab("Inventory", "package")
@@ -61,10 +373,10 @@ local SettingsTab = Window:AddTab("Settings", "sliders-horizontal")
 -- ------------------------------------------
 -- TAB 1: MAIN
 -- ------------------------------------------
-local SwingBox = MainTab:AddLeftGroupbox("Auto Swing", "zap")
+local SwingBox = MainTab:AddLeftGroupbox("Dupe Nuker Crystal", "zap")
 
 SwingBox:AddToggle("EnableAutoSwing", {
-    Text = "Auto Swing",
+    Text = "Dupe Nuker Crystal",
     Default = false,
     Callback = function(Value) State.AutoSwing = Value end,
 })
@@ -111,7 +423,7 @@ ExtraBox:AddToggle("EnableInstantMine", {
 ExtraBox:AddLabel("Menghilangkan durasi hold E batu/crystal.", true)
 
 -- ------------------------------------------
--- TAB 2: DUPE
+-- TAB 2: DUPE & AUTO PICKUP CRYSTAL
 -- ------------------------------------------
 local DupeBox = DupeTab:AddLeftGroupbox("Dupe", "copy")
 
@@ -136,34 +448,135 @@ DupeBox:AddButton("Start Dupe", function()
     end)
 end)
 
-local UtilityBox = DupeTab:AddRightGroupbox("Utilities", "wrench")
+-- Groupbox Kanan Tab Dupe: Auto Pickup Crystal
+local FarmBox = DupeTab:AddRightGroupbox("Auto Pickup Crystal", "crosshair")
 
-UtilityBox:AddToggle("EnableNoRagdoll", { Text = "No Ragdoll", Default = false, Callback = function(V) State.NoRagdoll = V end })
-UtilityBox:AddToggle("EnableNoFallDamage", { Text = "No Fall Damage", Default = false, Callback = function(V) State.NoFallDamage = V end })
-UtilityBox:AddDivider()
-UtilityBox:AddToggle("EnableCameraNoclip", {
-    Text = "Camera Noclip", Default = false,
+FarmBox:AddDropdown("RarityFilterDropdown", {
+    Values = TIER_LIST,
+    Default = 1,
+    Multi = false,
+    Text = "Filter Tier / Rarity",
+    Callback = function(Option)
+        SelectedRarityFilter = Option
+    end,
+})
+
+local CrystalDropdownObj
+
+FarmBox:AddButton("Scan World Crystals", function()
+    scanWorld()
+    table.clear(DropdownMap)
+    
+    local options = {}
+    for nameKey, data in pairs(ScannedCrystals) do
+        local optionStr = string.format("%s [x%d]", nameKey, data.Count)
+        table.insert(options, optionStr)
+        DropdownMap[optionStr] = nameKey
+    end
+    
+    if #options == 0 then
+        table.insert(options, "(Tidak Ada Kristal " .. SelectedRarityFilter .. ")")
+        SelectedTargetKey = nil
+    end
+    
+    if CrystalDropdownObj then
+        CrystalDropdownObj:SetValues(options)
+        CrystalDropdownObj:SetValue(options[1])
+    end
+    
+    Library:Notify(string.format("Scan Selesai: %d jenis kristal (%s)", #options, SelectedRarityFilter), 3)
+end)
+
+CrystalDropdownObj = FarmBox:AddDropdown("CrystalTargetDropdown", {
+    Values = {"(Tekan Scan World Terlebih Dahulu)"},
+    Default = 1,
+    Multi = false,
+    Text = "Pilih Target Kristal",
+    Callback = function(Option)
+        SelectedTargetKey = DropdownMap[Option] or Option
+    end,
+})
+
+FarmBox:AddToggle("StartGlideFarmToggle", {
+    Text = "Start Glide & Auto Pickup",
+    Default = false,
     Callback = function(Value)
-        State.CameraNoclip = Value
+        IsGliding = Value
+        
         if not Value then
-            pcall(function() LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom end)
+            stopGlide()
+            if CurrentGlideThread then task.cancel(CurrentGlideThread) end
+            return
         end
+
+        if not SelectedTargetKey or not ScannedCrystals[SelectedTargetKey] then
+            Library:Notify("Error: Pilih kristal dari dropdown terlebih dahulu!", 3)
+            return
+        end
+
+        local root = getRoot()
+        if root then
+            InitialCFrame = root.CFrame
+        end
+
+        enableNoclip()
+
+        CurrentGlideThread = task.spawn(function()
+            local groupData = ScannedCrystals[SelectedTargetKey]
+            
+            while IsGliding and groupData and #groupData.Instances > 0 do
+                local crystalPart = groupData.Instances[#groupData.Instances]
+                
+                if crystalPart and crystalPart.Parent then
+                    local targetPos = crystalPart.Position + Vector3.new(0, 1, 0)
+                    local targetCFrame = CFrame.new(targetPos, crystalPart.Position)
+                    
+                    while IsGliding and crystalPart.Parent do
+                        local deltaTime = task.wait(0.01)
+                        local currentRoot = getRoot()
+                        if not currentRoot then break end
+                        
+                        glideToCFrame(targetCFrame, deltaTime)
+                        executeAreaPickup()
+
+                        if not crystalPart.Parent then break end
+                    end
+                end
+
+                table.remove(groupData.Instances, #groupData.Instances)
+                groupData.Count = #groupData.Instances
+            end
+
+            if IsGliding and InitialCFrame then
+                Library:Notify("Terbang kembali ke posisi awal...", 3)
+                
+                while IsGliding do
+                    local deltaTime = task.wait(0.01)
+                    local currentRoot = getRoot()
+                    if not currentRoot then break end
+                    
+                    glideToCFrame(InitialCFrame, deltaTime)
+                    executeAreaPickup()
+
+                    if (currentRoot.Position - InitialCFrame.Position).Magnitude <= 3 then
+                        break
+                    end
+                end
+            end
+
+            stopGlide()
+            Library:Notify("Selesai! Semua kristal dipanen & kembali ke posisi awal.", 3)
+        end)
     end,
 })
 
 -- ------------------------------------------
--- TAB 3: INVENTORY (BACKPACK CHECKER INTEGRATED)
+-- TAB 3: INVENTORY & UTILITIES
 -- ------------------------------------------
 local InvBox = InvTab:AddLeftGroupbox("Isi Backpack (Auto-Group)", "package")
 local ItemLabels = {}
 
--- Membersihkan tag [xxx.xkg]
-local function cleanItemName(fullName)
-    return fullName:gsub("%s*%[%d+%.?%d*kg%]", "")
-end
-
 local function updateBackpackUI()
-    -- Sembunyikan label lama
     for _, lbl in ipairs(ItemLabels) do
         lbl:SetText("")
     end
@@ -200,6 +613,21 @@ local function updateBackpackUI()
     end
 end
 
+local UtilityBox = InvTab:AddRightGroupbox("Utilities", "wrench")
+
+UtilityBox:AddToggle("EnableNoRagdoll", { Text = "No Ragdoll", Default = false, Callback = function(V) State.NoRagdoll = V end })
+UtilityBox:AddToggle("EnableNoFallDamage", { Text = "No Fall Damage", Default = false, Callback = function(V) State.NoFallDamage = V end })
+UtilityBox:AddDivider()
+UtilityBox:AddToggle("EnableCameraNoclip", {
+    Text = "Camera Noclip", Default = false,
+    Callback = function(Value)
+        State.CameraNoclip = Value
+        if not Value then
+            pcall(function() LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom end)
+        end
+    end,
+})
+
 -- ------------------------------------------
 -- TAB 4: SETTINGS
 -- ------------------------------------------
@@ -215,7 +643,7 @@ ThemeManager:ApplyToTab(SettingsTab)
 SaveManager:BuildConfigSection(SettingsTab)
 
 -- ==========================================
--- HELPER & LOGIC LOOP
+-- LOGIC LOOP & LISTENERS
 -- ==========================================
 local function getPickaxe()
     local char = LocalPlayer.Character
@@ -252,7 +680,6 @@ local function applyInstantMine()
     end
 end
 
--- Loop Utama (Heartbeat)
 local lastSwing = 0
 local lastInstantCheck = 0
 local loopConnection
@@ -300,7 +727,6 @@ loopConnection = RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Listener Backpack Otomatis
 local function setupBackpackListener()
     local backpack = LocalPlayer:WaitForChild("Backpack")
     updateBackpackUI()
@@ -317,6 +743,8 @@ setupBackpackListener()
 
 Library:OnUnload(function()
     if loopConnection then loopConnection:Disconnect() end
+    stopGlide()
+    if CurrentGlideThread then task.cancel(CurrentGlideThread) end
     for prompt, saved in pairs(originalPrompts) do
         if prompt and prompt.Parent then
             pcall(function()
