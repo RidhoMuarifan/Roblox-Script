@@ -1,6 +1,6 @@
 -- ========================================================
 -- DUPE NUKER CRYSTAL, INSTANT MINE, DUPE & AUTO CRYSTAL HUB
--- OBSIDIAN UI VERSION (RENAMED AUTO SELECT DROP)
+-- OBSIDIAN UI VERSION (RENAMED AUTO SELECT DROP & TELEPORT)
 -- ========================================================
 
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
@@ -74,6 +74,7 @@ local IsDropping = false
 local lastPickup = 0
 local claimed = {}
 local originalPrompts = {}
+local backpackConnections = {}
 
 -- Alignment Mover Variables
 local MoverPosition, MoverOrientation, MoverAttachment
@@ -680,8 +681,9 @@ CrystalDropdownObj = FarmBox:AddDropdown("CrystalTargetDropdown", {
     end,
 })
 
+-- 🛠️ UPDATED: NAMA TOGGLE & NOTIFIKASI DISESUAIKAN MENJADI TELEPORT
 FarmBox:AddToggle("StartGlideFarmToggle", {
-    Text = "Start Glide & Auto Pickup",
+    Text = "Mulai teleport & Auto Pickup",
     Default = false,
     Callback = function(Value)
         IsGliding = Value
@@ -731,7 +733,7 @@ FarmBox:AddToggle("StartGlideFarmToggle", {
             end
 
             if IsGliding and InitialCFrame then
-                Library:Notify("Terbang kembali ke posisi awal...", 3)
+                Library:Notify("Teleport kembali ke posisi awal...", 3)
                 
                 while IsGliding do
                     local deltaTime = task.wait(0.01)
@@ -910,11 +912,19 @@ loopConnection = RunService.Heartbeat:Connect(function()
     end
 end)
 
+-- 清理 Listener Backpack 舊連線
 local function setupBackpackListener()
-    local backpack = LocalPlayer:WaitForChild("Backpack")
-    updateBackpackUI()
-    backpack.ChildAdded:Connect(updateBackpackUI)
-    backpack.ChildRemoved:Connect(updateBackpackUI)
+    for _, conn in ipairs(backpackConnections) do
+        conn:Disconnect()
+    end
+    table.clear(backpackConnections)
+
+    local backpack = LocalPlayer:WaitForChild("Backpack", 5)
+    if backpack then
+        updateBackpackUI()
+        table.insert(backpackConnections, backpack.ChildAdded:Connect(updateBackpackUI))
+        table.insert(backpackConnections, backpack.ChildRemoved:Connect(updateBackpackUI))
+    end
 end
 
 LocalPlayer.CharacterAdded:Connect(function()
@@ -928,6 +938,10 @@ Library:OnUnload(function()
     if loopConnection then loopConnection:Disconnect() end
     stopGlide()
     if CurrentGlideThread then task.cancel(CurrentGlideThread) end
+    for _, conn in ipairs(backpackConnections) do
+        conn:Disconnect()
+    end
+    table.clear(backpackConnections)
     for prompt, saved in pairs(originalPrompts) do
         if prompt and prompt.Parent then
             pcall(function()
